@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.db.models import IngestionJob as IngestionJobModel
+from app.db.session import SessionLocal
+
 
 @dataclass
 class IngestionJob:
@@ -26,10 +29,17 @@ class IngestionPipeline:
 
         job = IngestionJob(job_id=str(uuid.uuid4()), status='running', step='resolve_area', progress=10)
         self.jobs[job.job_id] = job
+        with SessionLocal() as db:
+            db.add(IngestionJobModel(id=job.job_id, area_id=f'area-{safe_lat}-{safe_lon}', status=job.status, step=job.step, progress=job.progress))
+            db.commit()
         return job
 
     def status(self, job_id: str) -> dict[str, Any]:
         job = self.jobs.get(job_id)
         if not job:
-            return {'status': 'not_found'}
+            with SessionLocal() as db:
+                stored = db.get(IngestionJobModel, job_id)
+                if not stored:
+                    return {'status': 'not_found'}
+                return {'job_id': stored.id, 'status': stored.status, 'step': stored.step, 'progress': stored.progress}
         return {'job_id': job.job_id, 'status': job.status, 'step': job.step, 'progress': job.progress}

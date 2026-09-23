@@ -106,6 +106,7 @@ class User(Base):
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False)
     name = Column(String, nullable=True)
+    password_hash = Column(String, nullable=False, default='')
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

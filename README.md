@@ -55,6 +55,7 @@ Set values in backend/.env before running the app. At minimum:
 - GROQ_MODEL_FAST
 - GROQ_MODEL_REASONING
 - GROQ_MODEL_RESEARCH
+- AUTH_SECRET (use a long random value outside development)
 
 The project is intentionally configured to use environment variables for keys and model selection.
 
@@ -69,9 +70,10 @@ The project is intentionally configured to use environment variables for keys an
 
 - The frontend uses the local FastAPI endpoints through the Vite `/api` proxy. Start the backend before loading live data.
 - The mobile shell implements onboarding, permission/ingestion handoff, Now, Nearby, Plan, Ask, Profile, place detail, saved places, and `/dev/ui-kit` with loading, error, empty, and offline-friendly states.
-- The first frontend open shows a local Sign up/Login gate. Profile includes Logout; this development auth stores only a browser-local account/session and is not a production identity system.
+- The first frontend open shows a Sign up/Login gate backed by SQLite users, PBKDF2 password hashes, and signed bearer sessions. Profile includes Logout; configure `AUTH_SECRET` before deploying.
 - Place names, scores, distances, images, weather, and briefing values shown after loading come from API responses; unavailable values are hidden or described as unavailable.
 - `/api/now` and `/api/nearby` now use browser coordinates with bounded Nominatim, Open-Meteo, and Overpass requests. Provider failures return partial/empty data instead of crashing.
+- Location ingestion jobs are persisted in SQLite and can be queried after process-local memory is gone.
 - The app is installable as a PWA through `frontend/public/manifest.webmanifest` and caches its shell for offline reopening. Native Capacitor packaging, interactive Leaflet maps, and external image enrichment remain optional follow-up integrations.
 
 ## Notes

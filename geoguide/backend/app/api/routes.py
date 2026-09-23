@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
+from app.db.models import User
+from app.db.session import SessionLocal
 from app.ingestion.pipeline import IngestionPipeline
 from app.services.agent import GeoGuideAgent
+from app.services.auth import auth_config, hash_password, issue_token, verify_password, verify_token
 from app.services.context_manager import ContextManager
 from app.services.live_context import get_live_context, safe_location
 from app.services.recommender import Recommender
@@ -13,6 +17,60 @@ context_manager = ContextManager()
 agent = GeoGuideAgent()
 recommender = Recommender()
 pipeline = IngestionPipeline()
+
+
+def _auth_user(authorization: str | None) -> User:
+    token = authorization.removeprefix('Bearer ').strip() if authorization else None
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid or expired session.')
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Account not found.')
+        return user
+
+
+@router.post('/auth/signup')
+def signup(payload: dict | None) -> dict:
+    safe = payload or {}
+    email = str(safe.get('email', '')).strip().lower()
+    password = str(safe.get('password', ''))
+    name = str(safe.get('name', '')).strip() or 'Local explorer'
+    if '@' not in email or len(password) < 6:
+        raise HTTPException(status_code=400, detail='Use a valid email and a password with at least 6 characters.')
+    user = User(id=__import__('uuid').uuid4().hex, email=email, name=name, password_hash=hash_password(password))
+    try:
+        with SessionLocal() as db:
+            db.add(user)
+            db.commit()
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail='An account with this email already exists.') from None
+    return {'token': issue_token(user.id), 'user': {'id': user.id, 'email': user.email, 'name': user.name}, 'auth': auth_config()}
+
+
+@router.post('/auth/login')
+def login(payload: dict | None) -> dict:
+    safe = payload or {}
+    email = str(safe.get('email', '')).strip().lower()
+    password = str(safe.get('password', ''))
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not verify_password(password, user.password_hash):
+            raise HTTPException(status_code=401, detail='Invalid email or password.')
+        return {'token': issue_token(user.id), 'user': {'id': user.id, 'email': user.email, 'name': user.name}, 'auth': auth_config()}
+
+
+@router.get('/auth/me')
+def current_user(authorization: str | None = Header(default=None)) -> dict:
+    user = _auth_user(authorization)
+    return {'user': {'id': user.id, 'email': user.email, 'name': user.name}}
+
+
+@router.post('/auth/logout')
+def logout(authorization: str | None = Header(default=None)) -> dict:
+    _auth_user(authorization)
+    return {'status': 'ok'}
 
 
 @router.get('/health')

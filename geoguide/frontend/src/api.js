@@ -1,6 +1,7 @@
 const request = async (path, options = {}) => {
+  const token = localStorage.getItem('geoguide-token')
   const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
     ...options,
   })
 
@@ -10,6 +11,10 @@ const request = async (path, options = {}) => {
 
   return response.json()
 }
+
+export const signUp = (name, email, password) => request('/api/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, password }) })
+export const logIn = (email, password) => request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+export const logOut = () => request('/api/auth/logout', { method: 'POST' })
 
 const locationQuery = (location = {}) => {
   const params = new URLSearchParams()

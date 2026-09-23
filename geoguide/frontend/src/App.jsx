@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ChevronRight, LocateFixed, LogOut, Mic, RefreshCw, Send, Sparkles } from 'lucide-react'
-import { askGeoGuide, getNearby, getNow, normalizePlace, startLocationIngestion } from './api'
+import { askGeoGuide, getNearby, getNow, logIn, logOut, normalizePlace, signUp, startLocationIngestion } from './api'
 import { interestOptions } from './config'
 import { BottomTabBar, Chip, IconCircleButton, PlaceCard, SectionTitle, StateMessage, WeatherPill } from './components/ui'
 import './App.css'
@@ -31,18 +31,23 @@ function AuthView({ onAuthenticated }) {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState('')
-  const submit = (event) => {
+  const [busy, setBusy] = useState(false)
+  const submit = async (event) => {
     event.preventDefault()
     setError('')
     if (!email.includes('@') || password.length < 6) { setError('Use a valid email and a password with at least 6 characters.'); return }
-    const account = (() => { try { return JSON.parse(localStorage.getItem('geoguide-account') || 'null') } catch { return null } })()
-    if (mode === 'login' && (!account || account.email !== email || account.password !== password)) { setError('No matching local account was found. Sign up first or check your details.'); return }
-    const nextAccount = mode === 'signup' ? { email, password, name: name.trim() || 'Local explorer' } : account
-    localStorage.setItem('geoguide-account', JSON.stringify(nextAccount))
-    localStorage.setItem('geoguide-session', 'true')
-    onAuthenticated()
+    setBusy(true)
+    try {
+      const result = mode === 'signup' ? await signUp(name, email, password) : await logIn(email, password)
+      localStorage.setItem('geoguide-token', result.token)
+      localStorage.setItem('geoguide-account', JSON.stringify(result.user))
+      localStorage.setItem('geoguide-session', 'true')
+      onAuthenticated()
+    } catch (requestError) {
+      setError(requestError.message || 'Authentication failed.')
+    } finally { setBusy(false) }
   }
-  return <div className="auth-screen"><div className="auth-brand"><span className="brand-mark">G</span><span className="eyebrow">Your place companion</span></div><div className="auth-copy"><h1>{mode === 'signup' ? 'Make every place feel closer.' : 'Welcome back.'}</h1><p>{mode === 'signup' ? 'Create your local GeoGuide account to keep preferences and plans with you.' : 'Sign in to continue your local guide.'}</p></div><div className="auth-tabs"><button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError('') }} type="button">Sign up</button><button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError('') }} type="button">Log in</button></div><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" autoComplete="name" /></label>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="primary-button" type="submit">{mode === 'signup' ? 'Create account' : 'Log in'} <ChevronRight size={18} /></button></form><p className="auth-note">This browser account is local to this development build.</p></div>
+  return <div className="auth-screen"><div className="auth-brand"><span className="brand-mark">G</span><span className="eyebrow">Your place companion</span></div><div className="auth-copy"><h1>{mode === 'signup' ? 'Make every place feel closer.' : 'Welcome back.'}</h1><p>{mode === 'signup' ? 'Create your GeoGuide account to keep preferences and plans with you.' : 'Sign in to continue your local guide.'}</p></div><div className="auth-tabs"><button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError('') }} type="button">Sign up</button><button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError('') }} type="button">Log in</button></div><form className="auth-form" onSubmit={submit}>{mode === 'signup' && <label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" autoComplete="name" /></label>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="primary-button" disabled={busy} type="submit">{busy ? 'Connecting…' : mode === 'signup' ? 'Create account' : 'Log in'} <ChevronRight size={18} /></button></form><p className="auth-note">Your account is stored securely by the GeoGuide backend.</p></div>
 }
 
 function PermissionView({ onLocate, busy }) {
@@ -96,7 +101,7 @@ function UIKitView() {
 }
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('geoguide-session') === 'true')
+  const [authenticated, setAuthenticated] = useState(() => localStorage.getItem('geoguide-session') === 'true' && Boolean(localStorage.getItem('geoguide-token')))
   const [onboarded, setOnboarded] = useState(() => localStorage.getItem('geoguide-onboarded') === 'true')
   const [interests, setInterests] = useState(readStoredInterests)
   const [permission, setPermission] = useState(() => localStorage.getItem('geoguide-location') !== 'true')
@@ -117,7 +122,7 @@ function App() {
   const completeOnboarding = (chosen) => { setInterests(chosen); localStorage.setItem('geoguide-interests', JSON.stringify(chosen)); localStorage.setItem('geoguide-onboarded', 'true'); setOnboarded(true) }
   const locate = () => { setPermission(false); localStorage.setItem('geoguide-location', 'true'); if (navigator.geolocation) navigator.geolocation.getCurrentPosition((position) => { const coordinates = { lat: position.coords.latitude, lon: position.coords.longitude }; setLocation(coordinates); localStorage.setItem('geoguide-coordinates', JSON.stringify(coordinates)); startLocationIngestion({ ...coordinates, accuracy: position.coords.accuracy }).catch(() => {}) }, () => {}) }
   const toggleSaved = (place) => { setSavedPlaces((current) => { const next = current.includes(place.id) ? current.filter((id) => id !== place.id) : [...current, place.id]; localStorage.setItem('geoguide-saved', JSON.stringify(next)); return next }) }
-  const logout = () => { localStorage.removeItem('geoguide-session'); setAuthenticated(false) }
+  const logout = async () => { await logOut().catch(() => undefined); localStorage.removeItem('geoguide-session'); localStorage.removeItem('geoguide-token'); setAuthenticated(false) }
   if (window.location.pathname === '/dev/ui-kit') return <UIKitView />
   if (!authenticated) return <AuthView onAuthenticated={() => setAuthenticated(true)} />
   if (!onboarded) return <Onboarding onComplete={completeOnboarding} />

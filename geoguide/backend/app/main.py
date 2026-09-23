@@ -7,6 +7,7 @@ from app.api.routes import router
 from app.config import APP_ENV, APP_HOST, APP_PORT
 from app.db.session import init_db
 
+init_db()
 app = FastAPI(title='GeoGuide API', version='0.1.0')
 app.add_middleware(
     CORSMiddleware,
