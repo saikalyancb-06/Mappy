@@ -20,7 +20,7 @@ from app.config import CACHE_TTL_WEB_S, SERPAPI_KEY, SERPAPI_TIMEOUT_SECONDS, SE
 from app.core.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
-ENGINES = {"google", "google_maps", "google_news", "google_events"}
+ENGINES = {"google", "google_maps", "google_news", "google_events", "google_hotels"}
 
 
 class SearchProviderError(RuntimeError):
@@ -56,6 +56,11 @@ class SearchResult:
     latitude: float | None = None
     longitude: float | None = None
     event_date: str | None = None
+    price_per_night: str | None = None  # exact decimal text from the provider's extracted rate
+    price_currency: str | None = None
+    hotel_class: int | None = None
+    checkin_time: str | None = None
+    checkout_time: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, [], "")}
@@ -96,7 +101,7 @@ class SerpApiClient:
     def configured(self) -> bool:
         return bool(self.api_key)
 
-    def search(self, query: str, *, engine: str = "google", lat: float | None = None, lon: float | None = None, zoom: int = 14, limit: int = 10, freshness: str | None = None) -> SearchResponse:
+    def search(self, query: str, *, engine: str = "google", lat: float | None = None, lon: float | None = None, zoom: int = 14, limit: int = 10, freshness: str | None = None, extra: dict[str, Any] | None = None) -> SearchResponse:
         normalized = " ".join((query or "").split())
         if not normalized:
             raise SearchProviderError("invalid_query", "A search query is required.")
@@ -109,6 +114,8 @@ class SerpApiClient:
             params["type"] = "search"
             if lat is not None and lon is not None:
                 params["ll"] = f"@{lat:.6f},{lon:.6f},{zoom}z"  # without it the query text carries the locality
+        elif engine == "google_hotels":
+            params.update({k: v for k, v in (extra or {}).items() if k in {"check_in_date", "check_out_date", "currency", "gl", "adults", "sort_by", "max_price"} and v is not None})
         elif engine == "google":
             params["num"] = min(max(limit, 1), 20)
             if freshness:
@@ -143,7 +150,7 @@ class SerpApiClient:
             raise SearchProviderError("malformed_response", "Web search returned an invalid response.") from None
         if not isinstance(payload, dict):
             raise SearchProviderError("malformed_response", "Web search returned an invalid response.")
-        if payload.get("error") and not any(payload.get(key) for key in ("local_results", "organic_results", "news_results", "events_results", "place_results")):
+        if payload.get("error") and not any(payload.get(key) for key in ("local_results", "organic_results", "news_results", "events_results", "place_results", "properties")):
             error = str(payload.get("error"))
             if "hasn't returned any results" in error or "no results" in error.lower():
                 results: list[SearchResult] = []
@@ -151,6 +158,11 @@ class SerpApiClient:
                 raise SearchProviderError("provider_failure", f"Web search error: {error[:120]}")
         else:
             results = self.parse(payload, engine, limit)
+        if engine == "google_hotels" and (extra or {}).get("currency"):
+            # Rates are quoted in the currency we asked for, even when the response doesn't echo it.
+            for result in results:
+                if result.price_per_night and not result.price_currency:
+                    result.price_currency = str(extra["currency"]).upper()
         retrieved_at = datetime.now(timezone.utc).isoformat()
         search_response = SearchResponse(normalized, engine, results, retrieved_at)
         cache_set("serpapi", cache_key, {"query": normalized, "engine": engine, "results": [asdict(r) for r in results], "retrieved_at": retrieved_at}, CACHE_TTL_WEB_S, source="serpapi")
@@ -159,6 +171,8 @@ class SerpApiClient:
 
     @staticmethod
     def parse(payload: dict[str, Any], engine: str, limit: int = 10) -> list[SearchResult]:
+        if engine == "google_hotels":
+            return SerpApiClient._parse_hotels(payload, limit)
         key = {"google_maps": "local_results", "google_news": "news_results", "google_events": "events_results"}.get(engine, "organic_results")
         items = payload.get(key) or []
         if engine == "google_maps" and not items and isinstance(payload.get("place_results"), dict):
@@ -209,5 +223,44 @@ class SerpApiClient:
                 break
         return results
 
+
+def _hotel_class(item: dict[str, Any]) -> int | None:
+    value = item.get("extracted_hotel_class")
+    if value is None and isinstance(item.get("hotel_class"), str):
+        digits = "".join(ch for ch in item["hotel_class"] if ch.isdigit())
+        value = digits[:1] or None
+    return _int(value)
+
+
+def _SerpApiClient_parse_hotels(payload: dict[str, Any], limit: int) -> list[SearchResult]:
+    from decimal import Decimal, InvalidOperation
+
+    currency = (payload.get("search_parameters") or {}).get("currency")
+    results: list[SearchResult] = []
+    for index, item in enumerate(payload.get("properties") or [], start=1):
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        coordinates = item.get("gps_coordinates") or {}
+        rate = item.get("rate_per_night") or {}
+        price = None
+        if rate.get("extracted_lowest") is not None:
+            try:
+                price = str(Decimal(str(rate["extracted_lowest"])).quantize(Decimal("0.01")))
+            except InvalidOperation:
+                price = None
+        link = item.get("link") if isinstance(item.get("link"), str) and item["link"].startswith("http") else None
+        results.append(SearchResult(
+            title=str(item["name"]).strip(), url=link, snippet=str(item.get("description") or "").strip(), source="Google Hotels", engine="google_hotels",
+            position=index, rating=_float(item.get("overall_rating")), review_count=_int(item.get("reviews")), place_type=item.get("type"),
+            place_id=item.get("property_token"), latitude=_float(coordinates.get("latitude")), longitude=_float(coordinates.get("longitude")),
+            price_per_night=price, price_currency=currency if price else None, hotel_class=_hotel_class(item),
+            checkin_time=item.get("check_in_time"), checkout_time=item.get("check_out_time"),
+        ))
+        if len(results) >= limit:
+            break
+    return results
+
+
+SerpApiClient._parse_hotels = staticmethod(_SerpApiClient_parse_hotels)  # type: ignore[attr-defined]
 
 client = SerpApiClient()

@@ -60,6 +60,9 @@ class Destination(Base):
     currency = Column(String, nullable=True)
     languages = Column(Text, default="[]")
     summary = Column(Text, nullable=True)
+    population = Column(Integer, nullable=True)
+    peak_months = Column(Text, nullable=True)  # JSON list of month numbers
+    season_profile = Column(String, nullable=True)
     source = Column(String, nullable=True)
     source_url = Column(String, nullable=True)
     data_source_id = Column(String, nullable=True, index=True)
@@ -99,14 +102,25 @@ class Poi(Base):
     description = Column(Text, nullable=True)
     opening_hours = Column(Text, nullable=True)  # structured JSON (see app/geo/opening_hours.py)
     opening_hours_raw = Column(Text, nullable=True)  # provider string, e.g. OSM syntax
-    entry_fee = Column(Float, nullable=True)
+    entry_fee = Column(Float, nullable=True)  # for sorting/filtering only; display uses entry_cost
+    entry_cost = Column(String, nullable=True)  # exact 2-place decimal text, paired with fee_currency (never a float)
     entry_fee_foreign = Column(Float, nullable=True)
     fee_currency = Column(String, nullable=True)
     fee_notes = Column(Text, nullable=True)
     price_level = Column(Integer, nullable=True)  # 0 free .. 4 luxury
     visit_duration_min = Column(Integer, nullable=True)
-    rating = Column(Float, nullable=True)
+    rating = Column(Float, nullable=True)  # 0-5 scale
     review_count = Column(Integer, nullable=True)
+    popularity_score = Column(Integer, nullable=True)  # 0-100 (dataset)
+    value_score = Column(Integer, nullable=True)  # 0-100 (dataset)
+    carbon_kg = Column(Float, nullable=True)  # footprint of a visit (dataset)
+    star_rating = Column(Integer, nullable=True)  # stays
+    guest_score = Column(Float, nullable=True)  # stays, 0-10 as published
+    property_type = Column(String, nullable=True)  # stays
+    checkin_time = Column(String, nullable=True)
+    checkout_time = Column(String, nullable=True)
+    distance_to_centre_km = Column(Float, nullable=True)
+    status = Column(String, nullable=True, default="active")
     step_free = Column(Boolean, nullable=True)
     accessibility_notes = Column(Text, nullable=True)
     indoor = Column(Boolean, nullable=True)
@@ -157,7 +171,10 @@ class SafetyAdvisory(Base):
     title = Column(String, nullable=False)
     body = Column(Text, nullable=True)
     category = Column(String, nullable=True)  # heat | water | wildlife | crowd | transport | health | general
-    severity = Column(String, nullable=False, default="info")  # info | low | moderate | high
+    severity = Column(String, nullable=False, default="info")  # stored as issued: info | low | advisory | caution | moderate | warning | high | severe
+    language = Column(String, nullable=True)
+    issuing_body = Column(String, nullable=True)
+    affected_area = Column(String, nullable=True)
     active_months = Column(Text, nullable=True)  # JSON list of month numbers; null = all year
     valid_from = Column(String, nullable=True)
     valid_to = Column(String, nullable=True)
@@ -178,10 +195,36 @@ class EventFestival(Base):
     end_date = Column(String, nullable=True)
     typical_months = Column(Text, nullable=True)  # JSON list when exact dates vary by year
     recurrence = Column(String, nullable=True)
+    is_ticketed = Column(Boolean, nullable=True)
+    ticket_price = Column(String, nullable=True)  # decimal text
+    currency = Column(String, nullable=True)
+    venue_lat = Column(Float, nullable=True)
+    venue_lon = Column(Float, nullable=True)
     source = Column(String, nullable=True)
     source_url = Column(String, nullable=True)
     data_source_id = Column(String, nullable=True)
     confidence = Column(Float, nullable=True)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class WeatherDaily(Base):
+    """Daily weather from a dataset (e.g. the organiser pack). Used only when live weather is unavailable, and labelled so."""
+
+    __tablename__ = "weather_daily"
+    __table_args__ = (UniqueConstraint("destination_id", "for_date", name="uq_weather_daily"),)
+
+    id = Column(String, primary_key=True)
+    destination_id = Column(String, nullable=False, index=True)
+    for_date = Column(String, nullable=False)
+    temp_min_c = Column(Float, nullable=True)
+    temp_max_c = Column(Float, nullable=True)
+    feels_like_c = Column(Float, nullable=True)
+    precipitation_mm = Column(Float, nullable=True)
+    humidity_pct = Column(Integer, nullable=True)
+    wind_kph = Column(Float, nullable=True)
+    condition = Column(String, nullable=True)
+    is_extreme = Column(Boolean, nullable=True)
+    data_source_id = Column(String, nullable=True)
     updated_at = Column(DateTime, default=utcnow)
 
 
@@ -213,8 +256,11 @@ class UserPreference(Base):
     user_id = Column(String, nullable=False, index=True)
     language = Column(String, default="en")
     budget = Column(String, default="moderate")  # low | moderate | high
+    max_daily_budget = Column(String, nullable=True)  # decimal text, e.g. "2500.00"
+    budget_currency = Column(String, nullable=True)
     pace = Column(String, default="balanced")  # relaxed | balanced | packed
     walking = Column(String, default="moderate")  # low | moderate | high tolerance
+    travel_mode = Column(String, nullable=True)  # walk | bicycle | motorbike | car | auto | transit
     accessibility = Column(Text, default="[]")  # e.g. ["step_free"]
     interests = Column(Text, default="{}")
     likes = Column(Text, default="[]")

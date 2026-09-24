@@ -17,7 +17,7 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
   const save = async () => {
     setStatus('Saving…')
     try {
-      await onSave(draft)
+      await onSave({ ...draft, max_daily_budget: draft.max_daily_budget === '' ? null : draft.max_daily_budget, budget_currency: draft.budget_currency || 'INR' })
       setStatus('Saved. Recommendations and plans now use these preferences.')
     } catch (error) {
       setStatus(error.message)
@@ -35,6 +35,14 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
     {option('pace', config?.paces || [])}
     <SectionTitle eyebrow="Walking">How much walking is OK</SectionTitle>
     {option('walking', config?.walking || [])}
+    <SectionTitle eyebrow="Budget">Daily spending limit</SectionTitle>
+    <div className="budget-row">
+      <select aria-label="Budget currency" value={draft.budget_currency || 'INR'} onChange={(event) => setDraft((current) => ({ ...current, budget_currency: event.target.value }))}>{(config?.currencies || ['INR']).map((code) => <option key={code} value={code}>{code}</option>)}</select>
+      <input inputMode="decimal" aria-label="Daily budget" placeholder="e.g. 2500" value={draft.max_daily_budget ?? ''} onChange={(event) => setDraft((current) => ({ ...current, max_daily_budget: event.target.value.replace(/[^\d.]/g, '') }))} />
+    </div>
+    <p className="muted-text">Every place shows its cost against this, and plans stay within it.</p>
+    <SectionTitle eyebrow="Getting around">Usual transport</SectionTitle>
+    <div className="chip-row wrap">{(config?.travel_modes || []).map((item) => <Chip key={item.id} active={draft.travel_mode === item.id} onClick={() => setDraft((current) => ({ ...current, travel_mode: current.travel_mode === item.id ? null : item.id }))}>{item.label}</Chip>)}</div>
     <SectionTitle eyebrow="Accessibility">Access needs</SectionTitle>
     <div className="chip-row wrap">{(config?.accessibility || []).map((item) => <Chip key={item.id} active={draft.accessibility?.includes(item.id)} onClick={() => toggleAccess(item.id)}>{item.label}</Chip>)}</div>
     <SectionTitle eyebrow="Language">Answers and briefings in</SectionTitle>

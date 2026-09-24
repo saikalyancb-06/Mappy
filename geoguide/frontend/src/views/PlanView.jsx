@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Leaf, Lock, PiggyBank, Footprints, Sparkles } from 'lucide-react'
+import { CheckCircle2, Clock3, Footprints, Leaf, Lock, PiggyBank, Sparkles } from 'lucide-react'
 import { buildPlan } from '../api'
-import { Chip, Notices, SectionTitle, StateMessage } from '../components/ui'
+import SearchBox from '../components/SearchBox'
+import { Chip, Notices, SectionTitle, StateMessage, Understood } from '../components/ui'
 import { formatDistance, formatMinutes, formatMoney, titleCase } from '../format'
 
 const DURATION_LABELS = { '2h': '2 hours', '4h': '4 hours', full: 'Full day' }
@@ -10,23 +11,28 @@ const PRESETS = [
   { id: 'greener', label: 'Greener', Icon: Leaf },
   { id: 'less_walking', label: 'Less walking', Icon: Footprints },
 ]
-const MODE = { walk: 'Walk', bicycle: 'Cycle', auto_rickshaw: 'Auto-rickshaw' }
+const MODE = { walk: 'Walk', bicycle: 'Cycle', auto_rickshaw: 'Auto-rickshaw', motorbike: 'Bike', car: 'Car', transit: 'Bus/metro' }
+const EXAMPLES = ['Temples and a sunset spot, no museums, under ₹500', 'Free from 4–8 PM, something peaceful, by bike', 'With kids, avoid crowded places, lots of shade']
 
-export default function PlanView({ context, config, savedIds, onOpen, onEnableLocation }) {
+export default function PlanView({ context, config, savedIds, onToggleSaved, onOpen, onEnableLocation, profile }) {
   const [duration, setDuration] = useState('4h')
   const [dayOffset, setDayOffset] = useState(0)
+  const [wishes, setWishes] = useState('')
+  const [travelMode, setTravelMode] = useState(profile?.travel_mode || null)
   const [plan, setPlan] = useState(null)
+  const [done, setDone] = useState([])
   const [weather, setWeather] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notices, setNotices] = useState([])
 
-  const run = async (preset = 'balanced', previous = null) => {
+  const run = async ({ preset = 'balanced', previous = null, replan = null } = {}) => {
     setBusy(true)
     setError('')
     try {
-      const result = await buildPlan({ context, duration, preset, dayOffset, start: dayOffset ? '08:00' : null, lockedIds: savedIds, previous })
+      const result = await buildPlan({ context, duration, preset, dayOffset, start: dayOffset ? '08:00' : null, lockedIds: savedIds, previous, wishes: wishes.trim(), replan, profile: travelMode ? { travel_mode: travelMode } : null })
       setPlan(result.plan)
+      if (!replan) setDone([])
       setWeather(result.weather)
       setNotices((result.provider_errors || []).map((item) => `${item.source}: ${item.message}`))
     } catch (requestError) {
@@ -36,41 +42,62 @@ export default function PlanView({ context, config, savedIds, onOpen, onEnableLo
     }
   }
 
+  // Re-optimise the rest of the plan from where the traveller actually is.
+  const replanFrom = (state) => run({ replan: { previous: plan, completed_ids: [...done, ...(state.completed || [])], ...state } })
+  const markDone = (stop) => { setDone((current) => [...current, stop.poi_id]); replanFrom({ completed: [stop.poi_id], now: stop.depart }) }
+
   if (!context.destination && !context.userLocation) {
     return <div className="view-content"><header className="simple-header"><div><span className="eyebrow">Shape the day</span><h1>Your plan</h1></div></header><StateMessage title="Where should we plan?" body="Choose a destination or turn on your location to build a plan." action={<button className="secondary-button" onClick={onEnableLocation} type="button">Use my location</button>} /></div>
   }
   const durations = config?.plan_durations || Object.keys(DURATION_LABELS)
   const totals = plan?.totals
   return <div className="view-content">
-    <header className="simple-header"><div><span className="eyebrow">Shape the day{context.destination ? ` · ${context.destination.name}` : ''}</span><h1>Your plan</h1></div><span className="status-pill">{plan ? titleCase(plan.preset) : 'Draft'}</span></header>
+    <header className="simple-header"><div><span className="eyebrow">Shape the day{context.destination ? ` · ${context.destination.name}` : ''}</span><h1>Your plan</h1></div><span className="status-pill">{plan ? (plan.replanned ? 'Re-optimised' : titleCase(plan.preset)) : 'Draft'}</span></header>
+    <label className="wishes-box"><span className="eyebrow">What would you like to do?</span>
+      <textarea value={wishes} onChange={(event) => setWishes(event.target.value)} rows={3} placeholder="Tell GeoGuide in your words — places you want, things to avoid, budget, time…" />
+    </label>
+    <div className="chip-row">{EXAMPLES.map((text) => <Chip key={text} onClick={() => setWishes(text)}>{text}</Chip>)}</div>
     <div className="chip-row">{durations.map((key) => <Chip key={key} active={duration === key} onClick={() => setDuration(key)}>{DURATION_LABELS[key] || key}</Chip>)}</div>
     <div className="chip-row"><Chip active={dayOffset === 0} onClick={() => setDayOffset(0)}>Starting now</Chip><Chip active={dayOffset === 1} onClick={() => setDayOffset(1)}>Tomorrow 8:00</Chip></div>
+    <div className="chip-row">{(config?.travel_modes || []).map((mode) => <Chip key={mode.id} active={travelMode === mode.id} onClick={() => setTravelMode((current) => current === mode.id ? null : mode.id)}>{mode.label}</Chip>)}</div>
+    <SearchBox context={context} kind="place" placeholder="Add a must-see place…" onPlace={(place) => { if (!savedIds.includes(place.id)) onToggleSaved(place) }} />
     {savedIds.length > 0 && <p className="muted-text"><Lock size={13} /> {savedIds.length} saved place{savedIds.length > 1 ? 's are' : ' is'} kept in the plan when they fit.</p>}
-    <button className="primary-button full-width" onClick={() => run('balanced')} disabled={busy} type="button"><Sparkles size={17} /> {busy ? 'Planning…' : plan ? 'Rebuild plan' : 'Build my plan'}</button>
+    {profile?.max_daily_budget && <p className="muted-text">Daily budget: {formatMoney(profile.max_daily_budget, profile.budget_currency)} — plans stay within it unless you name another amount.</p>}
+    <button className="primary-button full-width" onClick={() => run()} disabled={busy} type="button"><Sparkles size={17} /> {busy ? 'Planning…' : plan ? 'Rebuild plan' : 'Build my plan'}</button>
     {error && <StateMessage title="Could not build a plan" body={error} />}
     {plan && <>
+      <Understood items={plan.understood} />
       {plan.explanation?.length > 0 && <div className="briefing-card">{plan.explanation.map((line) => <p key={line}>{line}</p>)}</div>}
-      {plan.stops.length === 0 ? <StateMessage title="Nothing fits this window" body="Try a longer time window or another day." /> : <div className="timeline-card">
-        {plan.stops.map((stop) => <div className="timeline-stop" key={stop.poi_id}>
+      {plan.completed?.length > 0 && <p className="muted-text"><CheckCircle2 size={13} /> Done: {plan.completed.map((s) => s.name).join(', ')}</p>}
+      {plan.stops.length === 0 ? <StateMessage title="Nothing fits this window" body="Try a longer time window, a bigger budget or fewer exclusions." /> : <div className="timeline-card">
+        {plan.stops.map((stop, index) => <div className="timeline-stop" key={stop.poi_id}>
           <span className="stop-number">{stop.position}</span>
           <div>
-            <span className="eyebrow">{stop.arrive}–{stop.depart}{stop.locked ? ' · saved' : ''}</span>
+            <span className="eyebrow">{stop.arrive}–{stop.depart}{stop.locked ? ' · must-see' : ''}{stop.confidence ? ` · ${stop.confidence} confidence` : ''}</span>
             <h3><button type="button" className="link-button" onClick={() => onOpen({ id: stop.poi_id, name: stop.name, category: stop.category, lat: stop.lat, lon: stop.lon, reasons: stop.reasons, sources: [] })}>{stop.name}</button></h3>
-            <p>{MODE[stop.leg.mode] || stop.leg.mode} {formatMinutes(stop.leg.minutes)} · {formatDistance(stop.leg.distance_km)} from {stop.leg.from}{stop.leg.cost ? ` · ~${formatMoney(stop.leg.cost, stop.fee_currency)}` : ''}</p>
-            <p>Visit {formatMinutes(stop.visit_min)}{stop.entry_fee != null ? ` · entry ${formatMoney(stop.entry_fee, stop.fee_currency)}` : ' · entry not verified'}{stop.open_check === 'hours_unknown' ? ' · hours not verified' : ''}{stop.wait_min ? ` · waits ${stop.wait_min} min for opening` : ''}</p>
+            <p>{MODE[stop.leg.mode] || stop.leg.mode} {formatMinutes(stop.leg.minutes)} · {formatDistance(stop.leg.distance_km)} from {stop.leg.from}{stop.leg.cost ? ` · ~${formatMoney(String(stop.leg.cost), stop.fee_currency)}` : ''}</p>
+            <p>Visit {formatMinutes(stop.visit_min)}{stop.entry_cost != null ? ` · entry ${formatMoney(stop.entry_cost, stop.fee_currency)}` : ' · entry not verified'}{stop.open_check === 'hours_unknown' ? ' · hours not verified' : ''}{stop.wait_min ? ` · waits ${stop.wait_min} min for opening` : ''}</p>
+            {stop.conflicts?.length > 0 && <p className="conflict-note">Sources disagree about this stop — verify before going.</p>}
+            {index === 0 && <div className="stop-actions">
+              <button type="button" className="chip" disabled={busy} onClick={() => markDone(stop)}><CheckCircle2 size={14} /> Done</button>
+              <button type="button" className="chip" disabled={busy} onClick={() => replanFrom({ current_stop_id: stop.poi_id, extra_minutes: 15, now: stop.arrive })}><Clock3 size={14} /> Staying +15 min</button>
+              <button type="button" className="chip" disabled={busy} onClick={() => replanFrom({ current_stop_id: stop.poi_id, extra_minutes: 30, now: stop.arrive })}>+30 min</button>
+              <button type="button" className="chip" disabled={busy} onClick={() => replanFrom({ skipped_ids: [stop.poi_id] })}>Skip</button>
+            </div>}
           </div>
         </div>)}
       </div>}
+      {plan.stops.length > 0 && <button type="button" className="secondary-button full-width" disabled={busy} onClick={() => replanFrom({ extra_minutes: 20 })}><Clock3 size={16} /> Running 20 min late — re-plan the rest</button>}
       {totals && <div className="context-grid totals">
         <div><span>Time used</span><strong>{formatMinutes(plan.used_min)} of {formatMinutes(plan.window_min)}</strong></div>
-        <div><span>Est. cost</span><strong>{formatMoney(totals.cost, totals.cost_currency) || '—'}{totals.cost_complete ? '' : ' +'}</strong></div>
+        <div><span>Est. cost</span><strong>{totals.cost_display || '—'}{totals.cost_complete ? '' : ' +'}</strong>{totals.budget_cap && <small className={totals.within_budget ? 'open-yes' : 'open-no'}>{totals.within_budget ? 'within' : 'over'} {formatMoney(totals.budget_cap, totals.cost_currency)}</small>}</div>
         <div><span>Est. CO₂</span><strong>{Math.round(totals.co2_g)} g</strong></div>
         <div><span>Walking</span><strong>{formatDistance(totals.walking_km) || '0 m'}</strong></div>
       </div>}
       <p className="muted-text">{plan.estimates_note}{totals && !totals.cost_complete ? ' Some fees are not verified, so the cost is a lower bound.' : ''}</p>
-      {weather?.status === 'ok' && weather.signals?.length > 0 && <p className="muted-text">Planned around forecast: {weather.signals.join(', ')}.</p>}
+      {weather?.status === 'ok' && weather.signals?.length > 0 && <p className="muted-text">Planned around {weather.live === false ? 'the dataset weather record' : 'the forecast'}: {weather.signals.join(', ')}.</p>}
       <SectionTitle eyebrow="Re-plan">Choose what matters</SectionTitle>
-      <div className="replan-row">{PRESETS.filter((preset) => (config?.plan_presets || []).includes(preset.id)).map(({ id, label, Icon }) => <Chip key={id} active={plan.preset === id} disabled={busy} onClick={() => run(id, plan)}><Icon size={15} /> {label}</Chip>)}</div>
+      <div className="replan-row">{PRESETS.filter((preset) => (config?.plan_presets || []).includes(preset.id)).map(({ id, label, Icon }) => <Chip key={id} active={plan.preset === id} disabled={busy} onClick={() => run({ preset: id, previous: plan })}><Icon size={15} /> {label}</Chip>)}</div>
       <Notices items={[...(plan.warnings || []), ...notices]} />
       {plan.unscheduled?.length > 0 && <details className="unscheduled"><summary>{plan.unscheduled.length} places didn't fit</summary><ul>{plan.unscheduled.map((item) => <li key={item.id}>{item.name} — {item.reason}</li>)}</ul></details>}
     </>}

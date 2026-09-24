@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.models import Candidate, Evidence
@@ -9,13 +10,19 @@ from app.models import Candidate, Evidence
 _CURRENCY = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£"}
 
 
-def _money(amount: float | None, currency: str | None) -> str | None:
-    if amount is None:
+def _money(amount: Any, currency: str | None) -> str | None:
+    """Format exact decimal money (text or number) without passing through float arithmetic."""
+    if amount is None or amount == "":
         return None
-    if amount == 0:
+    try:
+        value = Decimal(str(amount))
+    except InvalidOperation:
+        return None
+    if value == 0:
         return "free"
     symbol = _CURRENCY.get(currency or "", (currency or "") + " ")
-    return f"{symbol}{amount:g}"
+    text = f"{value:,.2f}"
+    return f"{symbol}{text[:-3] if text.endswith('.00') else text}"
 
 
 def _distance(km: float | None) -> str | None:
@@ -48,7 +55,7 @@ def describe_candidate(candidate: Candidate, reference_label: str | None, distan
         parts.append("open status: unknown")
     if candidate.opening_hours_text:
         parts.append(f"hours: {candidate.opening_hours_text}")
-    fee = _money(candidate.entry_fee, candidate.fee_currency)
+    fee = _money(candidate.entry_cost if candidate.entry_cost is not None else candidate.entry_fee, candidate.fee_currency)
     if fee:
         foreign = _money(candidate.entry_fee_foreign, candidate.fee_currency)
         parts.append(f"entry: {fee}" + (f" (foreign visitors {foreign})" if foreign and foreign != fee else ""))
@@ -56,8 +63,31 @@ def describe_candidate(candidate: Candidate, reference_label: str | None, distan
         parts.append(f"fee notes: {candidate.fee_notes}")
     if candidate.visit_duration_min:
         parts.append(f"typical visit: {candidate.visit_duration_min} min")
-    if candidate.rating is not None:
+    if candidate.star_rating:
+        parts.append(f"{candidate.star_rating}-star {candidate.property_type or 'stay'}")
+    if candidate.guest_score is not None:
+        parts.append(f"guest score: {candidate.guest_score:.1f}/10" + (f" from {candidate.review_count} reviews" if candidate.review_count else ""))
+    elif candidate.rating is not None:
         parts.append(f"rating: {candidate.rating:.1f}" + (f" from {candidate.review_count} reviews" if candidate.review_count else ""))
+    if candidate.price_per_night:
+        parts.append(f"price per night: {_money(candidate.price_per_night, candidate.price_currency)} ({candidate.price_source}, retrieved {str(candidate.price_retrieved_at or '')[:10]})")
+    elif candidate.kind == "stay":
+        parts.append("price per night: not available in the data")
+    if candidate.checkin_time:
+        parts.append(f"check-in {candidate.checkin_time}, check-out {candidate.checkout_time}")
+    cost = candidate.cost_for_user
+    if cost.get("fits_budget") is not None:
+        parts.append(f"{'within' if cost['fits_budget'] else 'over'} the traveller's budget ({cost.get('note')})")
+    if candidate.popularity_score is not None:
+        parts.append(f"popularity: {candidate.popularity_score}/100")
+    if candidate.detour_min is not None:
+        parts.append(f"detour: about {candidate.detour_min} min (estimate)")
+    elif candidate.travel_min is not None and candidate.travel_mode:
+        parts.append(f"travel: about {candidate.travel_min} min by {candidate.travel_mode} (estimate)")
+    if candidate.conflicts:
+        parts.append("SOURCES DISAGREE: " + "; ".join(c["detail"] for c in candidate.conflicts) + " — tell the traveller to verify before going")
+    if candidate.confidence_detail:
+        parts.append(f"information confidence: {candidate.confidence_detail.get('label')}")
     if candidate.step_free is not None:
         parts.append("step-free: " + ("yes" if candidate.step_free else "no"))
     if candidate.accessibility_notes:
@@ -117,11 +147,13 @@ class EvidenceBuilder:
         if current:
             parts.append(f"Now in {place_label}: {current['summary']}, {current['temperature_c']}°C (feels like {current['apparent_c']}°C), humidity {current['humidity_pct']}%")
         day = weather.get("day")
-        if day:
+        if day and weather.get("live") is False:
+            parts.append(f"Dataset daily weather record for {day['date']} (not a live forecast): {day['summary']}, {day['temp_min_c']}–{day['temp_max_c']}°C, feels like {day['apparent_max_c']}°C, precipitation {day['precipitation_mm']} mm, humidity {day.get('humidity_pct')}%")
+        elif day:
             parts.append(f"Forecast for {day['date']}: {day['summary']}, {day['temp_min_c']}–{day['temp_max_c']}°C, feels like up to {day['apparent_max_c']}°C, precipitation chance up to {day['precipitation_probability_max']}%, UV index {day['uv_index_max']}, sunrise {str(day['sunrise'])[-5:]}, sunset {str(day['sunset'])[-5:]}")
         if weather.get("daylight_left_min") is not None:
             parts.append(f"Daylight left today: {weather['daylight_left_min'] // 60} h {weather['daylight_left_min'] % 60} min")
-        return self.add("weather", f"Weather for {place_label}", ". ".join(parts), source="Open-Meteo", source_url=weather.get("source_url"), retrieved_at=weather.get("retrieved_at"), confidence=0.9, metadata={"signals": weather.get("signals"), "day": day, "current": current})
+        return self.add("weather", f"Weather for {place_label}", ". ".join(parts), source="Open-Meteo" if weather.get("live", True) else "Dataset weather_daily (not live)", source_url=weather.get("source_url"), retrieved_at=weather.get("retrieved_at"), confidence=0.9, metadata={"signals": weather.get("signals"), "day": day, "current": current})
 
     def add_advisory(self, advisory: dict[str, Any]) -> Evidence:
         label = "Forecast-derived notice" if advisory.get("kind") == "weather_derived" else "Safety advisory"

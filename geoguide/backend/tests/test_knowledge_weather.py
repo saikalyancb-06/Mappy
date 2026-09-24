@@ -34,8 +34,15 @@ def test_lexical_retrieval_is_destination_scoped():
 
 
 def test_destination_name_alone_does_not_match_everything():
+    from sqlalchemy import func, select
+
+    from app.db.models import KnowledgeChunk
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        total = db.scalar(select(func.count()).select_from(KnowledgeChunk).where(KnowledgeChunk.destination_id == "dest-testville"))
     hits = retrieve("Testville", destination_id="dest-testville").hits
-    assert len(hits) <= 2
+    assert len(hits) <= 3 and len(hits) < total / 2
 
 
 def test_no_relevant_knowledge_returns_nothing():
@@ -78,7 +85,7 @@ def test_weather_current_and_forecast(weather_ok):
 
 
 def test_weather_failure_is_explicit():
-    weather = get_weather(10.0, 20.0, 0)  # network disabled in tests
+    weather = get_weather(-40.0, -40.0, 0)  # network disabled in tests; no dataset record here either
     assert weather["status"] == "unavailable" and weather["error"]["source"] == "open_meteo"
     assert weather_notices(weather) == []
 

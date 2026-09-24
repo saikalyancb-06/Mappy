@@ -17,7 +17,9 @@ from app.db.session import SessionLocal
 from app.search.normalizer import web_evidence
 from app.search.serpapi import SearchProviderError, SerpApiClient, client as default_client
 
-_SEVERITY_ORDER = {"high": 0, "moderate": 1, "low": 2, "info": 3}
+# Severity is kept exactly as issued; this order only sorts it (most serious first).
+_SEVERITY_ORDER = {"severe": 0, "high": 0, "warning": 1, "caution": 2, "moderate": 2, "advisory": 3, "low": 3, "info": 4}
+SERIOUS = {"severe", "high", "warning", "caution", "moderate"}
 
 
 def _months(value: str | None) -> list[int] | None:
@@ -55,6 +57,9 @@ def active_advisories(destination_id: str | None, on: date, poi_ids: list[str] |
         if row.poi_id and poi_ids is not None and row.poi_id not in poi_ids:
             continue
         active.append({
+            "language": row.language,
+            "issuing_body": row.issuing_body,
+            "affected_area": row.affected_area,
             "id": row.id,
             "title": row.title,
             "body": row.body,

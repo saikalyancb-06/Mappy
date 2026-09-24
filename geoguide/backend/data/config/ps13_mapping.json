@@ -1,0 +1,28 @@
+{
+  "_comment": "How the organiser PS-13 dataset maps onto GeoGuide's taxonomy. Child category codes are tried first, then the row's poi_category.",
+  "source": {
+    "id": "ps13",
+    "name": "KV Hackathon 2026 PS-13 dataset (synthetic)",
+    "version": "1.1.0-rc1",
+    "license": "Organiser-provided synthetic data; safe to commit (see data/sources/ps13/WORKING_WITH_THE_DATA.md)",
+    "confidence": 0.6
+  },
+  "category_codes": {
+    "heritage_fort": "monument", "heritage_temple": "temple", "heritage_ruins": "monument", "heritage_stepwell": "monument", "heritage": "monument",
+    "nature_lake": "lake", "nature_hill": "viewpoint", "nature_waterfall": "lake", "nature_garden": "park", "nature_desert": "park", "nature": "park",
+    "wildlife_sanctuary": "wildlife", "wildlife_safari": "wildlife", "wildlife_birding": "wildlife", "wildlife": "wildlife",
+    "museum_history": "museum", "museum_art": "museum", "museum_science": "museum", "museum": "museum",
+    "food_street": "restaurant", "food_fine": "restaurant", "food_cooking": "activity", "food_market": "market", "food": "restaurant",
+    "adventure_trek": "activity", "adventure_water": "activity", "adventure_air": "activity", "adventure_cycle": "activity", "adventure": "activity",
+    "shopping_bazaar": "market", "shopping_craft": "market", "shopping_mall": "market", "shopping": "market",
+    "nightlife_live": "nightlife", "nightlife_bar": "bar", "nightlife": "nightlife",
+    "beach_quiet": "beach", "beach_active": "beach", "beach": "beach",
+    "religious_pilgrim": "temple", "religious_ghats": "temple", "religious": "temple",
+    "wellness_ayur": "wellness", "wellness_yoga": "wellness", "wellness": "wellness",
+    "viewpoint": "viewpoint"
+  },
+  "tag_map": {"family_friendly": "family", "quiet": "peaceful", "photogenic": "photography", "indoor": "shade", "local_favourite": "local", "unesco": "iconic"},
+  "fact_confidence": {"high": 0.85, "medium": 0.65, "low": 0.45},
+  "merge_destination": {"max_distance_km": 25, "min_name_similarity": 0.9},
+  "coverage_radius_km": {"min": 5, "max": 25, "padding": 1.0}
+}

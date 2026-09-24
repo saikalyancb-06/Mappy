@@ -47,4 +47,8 @@ def client_config() -> dict:
         "walking": ["low", "moderate", "high"],
         "plan_durations": list(itinerary["durations_min"].keys()),
         "plan_presets": list(itinerary["presets"].keys()),
+        "travel_modes": [{"id": "walk", "label": "Walk"}, {"id": "bicycle", "label": "Cycle"}, {"id": "motorbike", "label": "Bike / scooter"}, {"id": "car", "label": "Car / cab"}, {"id": "auto", "label": "Auto"}, {"id": "transit", "label": "Bus / metro"}],
+        "ranking_modes": [{"id": "popular", "label": "Popular"}, {"id": "local", "label": "Local favourites"}, {"id": "hidden_gems", "label": "Hidden gems"}],
+        "hotel_sorts": [{"id": "best", "label": "Best match"}, {"id": "cheapest", "label": "Cheapest"}, {"id": "nearest", "label": "Nearest"}, {"id": "top_rated", "label": "Top rated"}],
+        "currencies": ["INR", "USD", "EUR", "GBP", "AED", "THB", "SGD", "JPY", "LKR", "NPR"],
     }

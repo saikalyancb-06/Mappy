@@ -17,7 +17,7 @@ const DESTINATION_KEY = 'geoguide-destination'
 const SAVED_KEY = 'geoguide-saved'
 const MOVE_THRESHOLD_M = 150
 const REFRESH_AFTER_MS = 5 * 60 * 1000
-const DEFAULT_PREFERENCES = { interests: {}, budget: 'moderate', pace: 'balanced', walking: 'moderate', accessibility: [], language: 'en' }
+const DEFAULT_PREFERENCES = { interests: {}, budget: 'moderate', pace: 'balanced', walking: 'moderate', accessibility: [], language: 'en', max_daily_budget: null, budget_currency: 'INR', travel_mode: null }
 
 const readJson = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback }
@@ -178,9 +178,9 @@ function App() {
   const openPlace = (place) => setSelectedPlace(place)
   const interestGroups = (config?.groups || []).filter((group) => Object.keys(preferences.interests || {}).includes(group.id))
   const views = {
-    now: <NowView context={context} language={preferences.language} interests={interestGroups.length ? interestGroups : (config?.groups || []).slice(0, 3)} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} userName={user?.name} />,
-    nearby: <NearbyView context={context} config={config} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onEnableLocation={device.start} />,
-    plan: <PlanView context={context} config={config} savedIds={savedIds} onOpen={openPlace} onEnableLocation={device.start} />,
+    now: <NowView onChooseDestination={chooseDestination} context={context} language={preferences.language} interests={interestGroups.length ? interestGroups : (config?.groups || []).slice(0, 3)} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} userName={user?.name} />,
+    nearby: <NearbyView context={context} config={config} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onEnableLocation={device.start} onChooseDestination={chooseDestination} hasBudget={Boolean(preferences.max_daily_budget)} />,
+    plan: <PlanView context={context} config={config} savedIds={savedIds} onToggleSaved={toggleSaved} onOpen={openPlace} onEnableLocation={device.start} profile={preferences} />,
     ask: <AskView context={context} language={preferences.language} selectedPlace={askPlace} onClearSelected={() => setAskPlace(null)} onAdoptDestination={chooseDestination} onOpen={openPlace} debugAvailable={debugAvailable} />,
     profile: <ProfileView key={JSON.stringify(preferences)} user={user} config={config} preferences={preferences} onSave={savePreferences} onLogout={logout} />,
   }

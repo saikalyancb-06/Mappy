@@ -82,3 +82,34 @@ def web_evidence(result: SearchResult, retrieved_at: str) -> dict[str, Any]:
         "retrieved_at": retrieved_at or datetime.now(timezone.utc).isoformat(),
         "confidence": DEFAULT_SOURCE_CONFIDENCE["serpapi_web"],
     }
+
+
+def candidate_from_hotel(result: SearchResult, retrieved_at: str, reference: tuple[float, float] | None = None) -> Candidate | None:
+    """A Google Hotels property becomes a stay candidate with a live nightly rate (when the provider gives one)."""
+    if result.engine != "google_hotels" or not valid_coordinates(result.latitude, result.longitude):
+        return None
+    identity = result.place_id or f"{normalize(result.title)}|{result.latitude:.5f}|{result.longitude:.5f}"
+    distance = haversine_km(reference[0], reference[1], result.latitude, result.longitude) if reference else None
+    return Candidate(
+        id="web-" + hashlib.sha1(identity.encode()).hexdigest()[:14],
+        name=result.title,
+        category="hotel",
+        kind="stay",
+        lat=result.latitude,
+        lon=result.longitude,
+        description=result.snippet or None,
+        rating=result.rating,
+        review_count=result.review_count,
+        star_rating=result.hotel_class,
+        property_type=result.place_type,
+        checkin_time=result.checkin_time,
+        checkout_time=result.checkout_time,
+        price_per_night=result.price_per_night,
+        price_currency=result.price_currency,
+        price_source="Google Hotels via SerpApi" if result.price_per_night else None,
+        price_retrieved_at=retrieved_at if result.price_per_night else None,
+        website=result.url,
+        sources=[SourceRef(source_type="serpapi_hotels", source="Google Hotels via SerpApi", source_url=result.url, source_id=result.place_id, retrieved_at=retrieved_at, confidence=DEFAULT_SOURCE_CONFIDENCE["serpapi_maps"])],
+        confidence=DEFAULT_SOURCE_CONFIDENCE["serpapi_maps"],
+        distance_km=round(distance, 3) if distance is not None else None,
+    )

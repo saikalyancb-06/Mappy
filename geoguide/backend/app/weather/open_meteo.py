@@ -63,6 +63,10 @@ def get_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any]:
     try:
         raw = _fetch(lat, lon)
     except ProviderError as exc:
+        fallback = dataset_weather(lat, lon, day_offset)
+        if fallback:
+            fallback["live_error"] = exc.as_dict()
+            return fallback
         return {"status": "unavailable", "error": exc.as_dict(), "source": "open-meteo"}
     timezone_name = raw.get("timezone") or "UTC"
     try:
@@ -129,6 +133,7 @@ def get_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any]:
 
     return {
         "status": "ok",
+        "live": True,
         "source": "open-meteo",
         "source_url": "https://open-meteo.com/",
         "retrieved_at": raw.get("retrieved_at"),
@@ -141,6 +146,50 @@ def get_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any]:
         "hourly": hours,
         "daylight_left_min": daylight_left_min,
         "signals": sorted(set((day or {}).get("signals", []) + (["rain"] if current_block and current_block.get("weather_code") in RAIN_CODES else []))),
+    }
+
+
+_DATASET_CONDITIONS = {"clear": ("Clear sky", 0), "partly_cloudy": ("Partly cloudy", 2), "cloudy": ("Overcast", 3), "haze": ("Haze", 45), "light_rain": ("Light rain", 61), "heavy_rain": ("Heavy rain", 65)}
+
+
+def dataset_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any] | None:
+    """Daily weather from an imported dataset for the destination containing the point.
+
+    Only used when live weather is unavailable, and always labelled ``live: False``;
+    there is no "current conditions" block because a daily record cannot say what it is like now.
+    """
+    from app.db.models import WeatherDaily
+    from app.db.session import SessionLocal
+    from app.geo.geocoding import nearest_destination
+
+    destination = nearest_destination(lat, lon)
+    if destination is None:
+        return None
+    now_local = local_now(destination.timezone)
+    target = (now_local + timedelta(days=day_offset)).date().isoformat()
+    with SessionLocal() as db:
+        row = db.query(WeatherDaily).filter(WeatherDaily.destination_id == destination.id, WeatherDaily.for_date == target).first()
+    if row is None:
+        return None
+    summary, code = _DATASET_CONDITIONS.get(row.condition or "", (str(row.condition or "Unknown").replace("_", " ").title(), None))
+    rules = load_rules("ranking")["weather"]
+    signals = []
+    if row.feels_like_c is not None and row.feels_like_c >= rules["heat_apparent_c"]:
+        signals.append("heat")
+    if (row.precipitation_mm or 0) >= 5 or (code in RAIN_CODES):
+        signals.append("rain")
+    day = {
+        "date": row.for_date, "summary": summary, "weather_code": code, "temp_max_c": row.temp_max_c, "temp_min_c": row.temp_min_c,
+        "apparent_max_c": row.feels_like_c, "precipitation_probability_max": None, "precipitation_mm": row.precipitation_mm,
+        "humidity_pct": row.humidity_pct, "wind_kph": row.wind_kph, "uv_index_max": None, "sunrise": None, "sunset": None,
+        "is_extreme": bool(row.is_extreme), "signals": signals,
+    }
+    return {
+        "status": "ok", "live": False, "source": "dataset weather_daily", "source_url": None,
+        "note": "Live weather is unavailable; showing the dataset's daily record for this date.",
+        "retrieved_at": row.updated_at.isoformat() + "Z" if row.updated_at else None, "cached": False,
+        "timezone": destination.timezone, "local_time": now_local.isoformat(timespec="minutes"), "day_offset": day_offset,
+        "current": None, "day": day, "hourly": [], "daylight_left_min": None, "signals": signals,
     }
 
 

@@ -41,6 +41,13 @@ class DiscoveryRequest:
     allow_osm: bool = True
     limit: int | None = None
     user_point: tuple[float, float] | None = None
+    categories: set[str] | None = None  # explicit category set (e.g. from plan wishes)
+    exclude_categories: set[str] = field(default_factory=set)
+    exclude_ids: set[str] = field(default_factory=set)
+    avoid_tags: set[str] = field(default_factory=set)
+    within_budget: bool = False
+    constraints: Any = None  # app.query.constraints.Constraints
+    travel_origin: tuple[float, float] | None = None
 
 
 @dataclass
@@ -53,6 +60,8 @@ class DiscoveryResult:
 
 
 def _category_filter(request: DiscoveryRequest) -> tuple[set[str] | None, set[str] | None]:
+    if request.categories:
+        return set(request.categories), None
     if request.category:
         return {request.category}, None
     if request.group:
@@ -86,9 +95,35 @@ def _web_query(request: DiscoveryRequest) -> str:
     return "tourist attractions"
 
 
+def apply_constraints(request: DiscoveryRequest) -> None:
+    """Fold natural-language constraints into the request's filters and search radius."""
+    c = request.constraints
+    if c is None:
+        return
+    if not (request.category or request.group or request.categories) and (c.include_categories or c.include_groups):
+        cats = set(c.include_categories)
+        for group in c.include_groups:
+            cats.update(group_categories(group))
+        request.categories = cats
+    request.exclude_categories = set(request.exclude_categories) | set(c.exclude_categories)
+    request.avoid_tags = set(request.avoid_tags) | set(c.avoid_tags)
+    request.preferences = list(dict.fromkeys([*request.preferences, *c.preferences]))
+    if c.open_now:
+        request.require_open = True
+        request.time_sensitive = True
+    if c.raining and "rain" not in request.weather_signals:
+        request.weather_signals = [*request.weather_signals, "rain"]
+    if c.max_travel_min:
+        travel = load_rules("ranking")["travel"]
+        speed = travel["speed_kmh"].get(c.travel_mode or travel["default_mode"], 4.5)
+        reach = speed * c.max_travel_min / 60 / travel["detour_factor"]
+        request.reference.radius_km = round(max(request.reference.radius_km, reach) if request.reference.semantic == "near_me" else min(request.reference.radius_km, max(reach, 0.5)), 2)
+
+
 def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApiClient | None = None) -> DiscoveryResult:
     web = web or default_client
     config = load_rules("ranking")
+    apply_constraints(request)
     reference = request.reference
     categories, kinds = _category_filter(request)
     errors: list[dict[str, str]] = []
@@ -146,9 +181,22 @@ def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApi
         time_sensitive=request.time_sensitive,
         semantic_scores=semantic,
         user_point=request.user_point,
+        exclude_categories=set(request.exclude_categories),
+        exclude_ids=set(request.exclude_ids),
+        avoid_tags=set(request.avoid_tags),
+        within_budget=request.within_budget,
+        constraints=request.constraints,
+        travel_origin=request.travel_origin,
     )
     result = rank(merged, rank_request)
+    ranked = result.ranked
     limit = request.limit or config["max_results"]
+    if request.constraints is not None and request.constraints.limit:
+        # Decision mode: only a few options, and never low-confidence ones.
+        limit = request.constraints.limit
+        confident = [c for c in ranked if c.confidence_detail.get("label") != "low"]
+        ranked = confident or ranked
+    result.ranked = ranked
     if trace:
         trace.step(
             "discovery",

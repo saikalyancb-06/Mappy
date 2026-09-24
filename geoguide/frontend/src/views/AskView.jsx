@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Bug, Mic, Send, Sparkles, Volume2, X } from 'lucide-react'
 import { askGeoGuide } from '../api'
 import RichText from '../components/RichText'
-import { Chip, IconCircleButton, PlaceFacts } from '../components/ui'
-import { titleCase } from '../format'
+import { Chip, ConfidenceBadge, IconCircleButton, PlaceFacts } from '../components/ui'
+import { formatDistance, titleCase } from '../format'
 
 const SPEECH_LANG = { en: 'en-IN', kn: 'kn-IN', hi: 'hi-IN' }
-const SUGGESTIONS = ['What should I visit here today?', 'Coffee shops near me', 'Why is this place historically important?', 'How should I dress for temples?', 'Plan my evening', 'Which places are step-free?']
+const SUGGESTIONS = ['I have 2 hours and ₹800, something peaceful', 'Somewhere open now, not crowded, good reviews, 20 min by bike', 'Give me 3 hidden gems only', 'Coffee shops near me', 'Why is this place historically important?', 'Which places are step-free?']
 
 const Recognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null
 
@@ -84,8 +84,11 @@ export default function AskView({ context, language, selectedPlace, onClearSelec
         const { response } = message
         return <div className="message assistant" key={index}>
           <RichText text={response.answer} sources={response.sources} onCite={setOpenSource} />
+          {response.understood?.length > 0 && <div className="understood-inline">{response.understood.map((item) => <span className="understood-chip" key={item}>{item}</span>)}</div>}
+          {response.route && <p className="route-summary">From {response.route.origin} to {response.route.destination}: ~{response.route.direct_min} min by {response.route.mode} (estimate), detours up to {response.route.max_detour_min} min</p>}
+          {response.comparison && <div className="compare-wrap"><table className="compare-table"><thead><tr><th>Factor</th>{response.comparison.columns.map((name) => <th key={name}>{name}</th>)}</tr></thead><tbody>{response.comparison.rows.map((row) => <tr key={row.factor}><td>{row.factor}</td>{row.values.map((value, i) => <td key={i}>{value == null ? '—' : row.format === 'km' ? formatDistance(value) : row.format === 'bar' ? <span className="mini-bar"><span style={{ width: `${Math.round(value * 100)}%` }} /></span> : titleCase(String(value))}</td>)}</tr>)}</tbody></table></div>}
           {response.clarification && <div className="suggestion-row wrap">{response.clarification.options.map((option) => <Chip key={option.id} onClick={() => send(`Where is ${option.name}${option.address ? ` at ${option.address}` : ''}?`)}>{option.name}</Chip>)}</div>}
-          {response.results?.length > 0 && response.intent.intent !== 'PLACE_DISAMBIGUATION' && <div className="ask-results">{response.results.slice(0, 5).map((result) => <button type="button" className="ask-result" key={result.id} onClick={() => onOpen(result)}><strong>{result.name}</strong><PlaceFacts place={result} showUserDistance={false} /></button>)}</div>}
+          {response.results?.length > 0 && !['PLACE_DISAMBIGUATION', 'COMPARE'].includes(response.intent.intent) && <div className="ask-results">{response.results.slice(0, 5).map((result) => <button type="button" className="ask-result" key={result.id} onClick={() => onOpen(result)}><strong>{result.name}</strong><PlaceFacts place={result} showUserDistance={false} /><ConfidenceBadge place={result} /></button>)}</div>}
           {response.notices?.length > 0 && <small className="notice-text">{response.notices.join(' ')}</small>}
           <small className="answer-meta">{contextLine(response)} · {response.answer_meta.mode === 'deterministic' ? 'assembled from verified data' : 'AI summary, checked against sources'}<button type="button" className="speak-button" aria-label="Read aloud" onClick={() => speak(response.answer)}><Volume2 size={13} /></button></small>
           {response.debug && <details className="debug-trace"><summary>Retrieval trace ({response.debug.total_ms} ms)</summary><pre>{JSON.stringify(response.debug, null, 2)}</pre></details>}

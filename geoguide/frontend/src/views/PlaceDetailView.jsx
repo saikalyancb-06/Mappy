@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, MessageCircle, Navigation } from 'lucide-react'
 import { getPlace } from '../api'
-import { AdvisoryList, IconCircleButton, PlaceFacts, SourceBadge } from '../components/ui'
+import { AdvisoryList, ConfidenceList, ConflictNote, IconCircleButton, PlaceFacts, SourceBadge, WhyBars } from '../components/ui'
 import { formatMoney, mapsLink, titleCase } from '../format'
 
 export default function PlaceDetailView({ place: initial, context, saved, onSave, onBack, onAsk }) {
@@ -14,7 +14,9 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
     getPlace(initial.id, context).then(setDetail).catch((requestError) => setError(requestError.message))
   }, [initial.id, context, storedPlace])
 
-  const place = { ...initial, ...(detail?.place || {}), reasons: initial.reasons?.length ? initial.reasons : detail?.place?.reasons }
+  const stored = detail?.place || {}
+  // Keep what ranking computed for this traveller (reasons, bars, cost fit, travel time) over the plain stored record.
+  const place = { ...initial, ...stored, reasons: initial.reasons?.length ? initial.reasons : stored.reasons, bars: initial.bars && Object.keys(initial.bars).length ? initial.bars : stored.bars, cost_for_user: initial.cost_for_user?.kind ? initial.cost_for_user : stored.cost_for_user, confidence_detail: initial.confidence_detail?.label ? initial.confidence_detail : stored.confidence_detail, conflicts: initial.conflicts?.length ? initial.conflicts : stored.conflicts, travel_min: initial.travel_min ?? stored.travel_min, detour_min: initial.detour_min, price_per_night: initial.price_per_night || stored.price_per_night, price_currency: initial.price_currency || stored.price_currency, price_source: initial.price_source || stored.price_source }
   const link = mapsLink(place)
   const foreignFee = formatMoney(place.entry_fee_foreign, place.fee_currency)
   return <div className="detail-view">
@@ -23,13 +25,24 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
     <section className="detail-sheet">
       <button className={`detail-save ${saved ? 'saved' : ''}`} aria-label={saved ? 'Remove from plan' : 'Add to plan'} onClick={() => onSave(place)} type="button">★</button>
       <PlaceFacts place={place} />
-      {place.reasons?.length > 0 && <><h2>Why this suits you</h2><ul className="reason-list">{place.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></>}
+      <ConflictNote place={place} />
+      {(place.reasons?.length > 0 || place.bars) && <><h2>Why this place</h2><WhyBars bars={place.bars} />{place.reasons?.length > 0 && <ul className="reason-list">{place.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}</>}
+      {place.confidence_detail?.parts && <><h2>How reliable is this? <span className={`conf-${place.confidence_detail.label}`}>{titleCase(place.confidence_detail.label)}</span></h2><ConfidenceList detail={place.confidence_detail} /></>}
       {place.description && <><h2>About</h2><p>{place.description}</p></>}
       {detail?.facts?.length > 0 && <><h2>Good to know</h2><ul className="fact-list">{detail.facts.map((fact) => <li key={fact.chunk_id}>{fact.content.replace(`${place.name}: `, '')}<span className="fact-source">{fact.source}</span></li>)}</ul></>}
       <h2>Practical details</h2>
       <dl className="detail-grid">
-        <dt>Hours</dt><dd>{place.opening_hours_text || 'Not verified'}</dd>
-        <dt>Entry</dt><dd>{formatMoney(place.entry_fee, place.fee_currency) || 'Not verified'}{foreignFee && foreignFee !== formatMoney(place.entry_fee, place.fee_currency) ? ` (foreign visitors ${foreignFee})` : ''}</dd>
+        {place.kind === 'stay' ? <>
+          <dt>Price / night</dt><dd>{place.price_per_night ? `${formatMoney(place.price_per_night, place.price_currency)} · ${place.price_source}` : 'Not available — no live rate for these dates'}</dd>
+          {place.star_rating ? <><dt>Class</dt><dd>{place.star_rating}-star {place.property_type || ''}</dd></> : null}
+          {place.guest_score != null && <><dt>Guest score</dt><dd>{place.guest_score.toFixed(1)}/10 from {place.review_count} reviews</dd></>}
+          {place.checkin_time && <><dt>Check-in</dt><dd>{place.checkin_time} · check-out {place.checkout_time}</dd></>}
+        </> : <>
+          <dt>Hours</dt><dd>{place.opening_hours_text || 'Not verified'}</dd>
+          <dt>Entry</dt><dd>{formatMoney(place.entry_cost ?? place.entry_fee, place.fee_currency) || 'Not verified'}{foreignFee && foreignFee !== formatMoney(place.entry_cost ?? place.entry_fee, place.fee_currency) ? ` (foreign visitors ${foreignFee})` : ''}</dd>
+        </>}
+        {place.cost_for_user?.note && <><dt>Your budget</dt><dd>{place.cost_for_user.fits_budget === false ? 'Over budget — ' : place.cost_for_user.fits_budget ? 'Fits — ' : ''}{place.cost_for_user.note}</dd></>}
+        {place.carbon_kg != null && <><dt>Footprint</dt><dd>{place.carbon_kg} kg CO₂ per visit (dataset)</dd></>}
         {place.fee_notes && <><dt>Fee notes</dt><dd>{place.fee_notes}</dd></>}
         <dt>Access</dt><dd>{place.step_free == null ? 'Step-free access not verified' : place.step_free ? 'Step-free' : 'Not step-free'}{place.accessibility_notes ? ` — ${place.accessibility_notes}` : ''}</dd>
         {place.walking_effort && <><dt>Walking</dt><dd>{titleCase(place.walking_effort)} effort</dd></>}

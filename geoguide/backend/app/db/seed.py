@@ -10,6 +10,7 @@ Usage: ``python -m app.db.seed [--pack DIR ...]`` (defaults to every pack in PAC
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal
 import json
 import logging
 import re
@@ -126,6 +127,7 @@ def load_pack(pack_dir: Path) -> dict[str, int]:
                 opening_hours=_json_or_none(item.get("opening_hours")),
                 opening_hours_raw=item.get("opening_hours_raw"),
                 entry_fee=item.get("entry_fee"),
+                entry_cost=f"{Decimal(str(item['entry_fee'])):.2f}" if item.get("entry_fee") is not None else None,
                 entry_fee_foreign=item.get("entry_fee_foreign"),
                 fee_currency=item.get("fee_currency") or (destination_data.get("currency") if item.get("entry_fee") is not None else None),
                 fee_notes=item.get("fee_notes"),

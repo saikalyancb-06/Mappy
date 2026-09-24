@@ -1,25 +1,145 @@
 {
   "_comment": "Itinerary optimiser settings. Transport costs/CO2 are estimates per currency; travel times are haversine x detour_factor / speed and are always labelled as estimates.",
-  "durations_min": {"2h": 120, "4h": 240, "full": 540},
-  "default_visit_min": {"temple": 40, "monument": 40, "museum": 60, "viewpoint": 45, "lake": 45, "park": 45, "village": 90, "market": 30, "activity": 60, "restaurant": 60, "cafe": 40, "default": 40},
+  "durations_min": {
+    "2h": 120,
+    "4h": 240,
+    "full": 540
+  },
+  "default_visit_min": {
+    "temple": 40,
+    "monument": 40,
+    "museum": 60,
+    "viewpoint": 45,
+    "lake": 45,
+    "park": 45,
+    "village": 90,
+    "market": 30,
+    "activity": 60,
+    "restaurant": 60,
+    "cafe": 40,
+    "default": 40
+  },
   "detour_factor": 1.3,
   "buffer_min": 5,
   "max_wait_for_opening_min": 30,
   "modes": {
-    "walk": {"speed_kmh": 4.0, "co2_g_per_km": 0},
-    "bicycle": {"speed_kmh": 10.0, "co2_g_per_km": 0},
-    "auto_rickshaw": {"speed_kmh": 18.0, "co2_g_per_km": 75}
+    "walk": {
+      "speed_kmh": 4.0,
+      "co2_g_per_km": 0
+    },
+    "bicycle": {
+      "speed_kmh": 10.0,
+      "co2_g_per_km": 0
+    },
+    "auto_rickshaw": {
+      "speed_kmh": 18.0,
+      "co2_g_per_km": 75
+    },
+    "motorbike": {
+      "speed_kmh": 25.0,
+      "co2_g_per_km": 50
+    },
+    "car": {
+      "speed_kmh": 22.0,
+      "co2_g_per_km": 140
+    },
+    "transit": {
+      "speed_kmh": 15.0,
+      "co2_g_per_km": 30,
+      "wait_min": 8
+    }
   },
   "transport_costs": {
-    "INR": {"walk": {"base": 0, "per_km": 0}, "bicycle": {"base": 0, "per_km": 0}, "auto_rickshaw": {"base": 30, "per_km": 15}}
+    "INR": {
+      "walk": {
+        "base": 0,
+        "per_km": 0
+      },
+      "bicycle": {
+        "base": 0,
+        "per_km": 0
+      },
+      "auto_rickshaw": {
+        "base": 30,
+        "per_km": 15
+      },
+      "motorbike": {
+        "base": 0,
+        "per_km": 3
+      },
+      "car": {
+        "base": 100,
+        "per_km": 15
+      },
+      "transit": {
+        "base": 10,
+        "per_km": 1.5
+      }
+    }
   },
-  "walk_max_km": {"low": 0.8, "moderate": 1.5, "high": 3.0},
+  "walk_max_km": {
+    "low": 0.8,
+    "moderate": 1.5,
+    "high": 3.0
+  },
   "presets": {
-    "balanced":     {"weights": {"value": 100, "time": 0.4, "cost": 0.05, "carbon": 0.02, "walking": 4},  "walk_multiplier": 1.0, "bicycle_max_km": 0},
-    "cheaper":      {"weights": {"value": 100, "time": 0.3, "cost": 0.6,  "carbon": 0.02, "walking": 2},  "walk_multiplier": 1.6, "bicycle_max_km": 6},
-    "greener":      {"weights": {"value": 100, "time": 0.3, "cost": 0.05, "carbon": 0.4,  "walking": 2},  "walk_multiplier": 1.4, "bicycle_max_km": 8},
-    "less_walking": {"weights": {"value": 100, "time": 0.4, "cost": 0.03, "carbon": 0.02, "walking": 25}, "walk_multiplier": 0.35, "bicycle_max_km": 0}
+    "balanced": {
+      "weights": {
+        "value": 100,
+        "time": 0.4,
+        "cost": 0.05,
+        "carbon": 0.02,
+        "walking": 4
+      },
+      "walk_multiplier": 1.0,
+      "bicycle_max_km": 0
+    },
+    "cheaper": {
+      "weights": {
+        "value": 100,
+        "time": 0.3,
+        "cost": 0.6,
+        "carbon": 0.02,
+        "walking": 2
+      },
+      "walk_multiplier": 1.6,
+      "bicycle_max_km": 6
+    },
+    "greener": {
+      "weights": {
+        "value": 100,
+        "time": 0.3,
+        "cost": 0.05,
+        "carbon": 0.4,
+        "walking": 2
+      },
+      "walk_multiplier": 1.4,
+      "bicycle_max_km": 8
+    },
+    "less_walking": {
+      "weights": {
+        "value": 100,
+        "time": 0.4,
+        "cost": 0.03,
+        "carbon": 0.02,
+        "walking": 25
+      },
+      "walk_multiplier": 0.35,
+      "bicycle_max_km": 0
+    }
   },
-  "weather": {"heat_hours": [12, 13, 14, 15], "heat_outdoor_value_factor": 0.5, "rain_outdoor_value_factor": 0.6, "heat_apparent_c": 35, "rain_probability": 60},
-  "max_stops": 8
+  "weather": {
+    "heat_hours": [
+      12,
+      13,
+      14,
+      15
+    ],
+    "heat_outdoor_value_factor": 0.5,
+    "rain_outdoor_value_factor": 0.6,
+    "heat_apparent_c": 35,
+    "rain_probability": 60
+  },
+  "max_stops": 8,
+  "_comment_modes": "A traveller-chosen mode (walk, bicycle, motorbike, car, auto, transit) replaces auto-rickshaw for longer legs; walking is still used for short hops unless less_walking."
 }

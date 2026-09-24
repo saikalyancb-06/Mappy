@@ -14,7 +14,7 @@ from app.core.text import normalize
 from app.geo import opening_hours
 
 # Relative trust per source type; overridable in data/config/ranking.json.
-DEFAULT_SOURCE_CONFIDENCE = {"curated": 0.95, "database": 0.9, "osm": 0.75, "serpapi_maps": 0.7, "serpapi_web": 0.5}
+DEFAULT_SOURCE_CONFIDENCE = {"curated": 0.95, "database": 0.9, "osm": 0.75, "serpapi_maps": 0.7, "dataset": 0.6, "serpapi_web": 0.5}
 
 
 @dataclass
@@ -36,17 +36,39 @@ class Candidate:
     lat: float | None
     lon: float | None
     destination_id: str | None = None
+    destination_name: str | None = None
     address: str | None = None
     neighborhood: str | None = None
     description: str | None = None
     tags: list[str] = field(default_factory=list)
     rating: float | None = None
     review_count: int | None = None
+    popularity_score: int | None = None
+    value_score: int | None = None
+    carbon_kg: float | None = None
+    star_rating: int | None = None
+    guest_score: float | None = None
+    property_type: str | None = None
+    checkin_time: str | None = None
+    checkout_time: str | None = None
+    distance_to_centre_km: float | None = None
+    price_per_night: str | None = None  # decimal text from a live rate source; never estimated
+    price_currency: str | None = None
+    price_source: str | None = None
+    price_retrieved_at: str | None = None
+    cost_for_user: dict[str, Any] = field(default_factory=dict)
+    travel_min: int | None = None  # estimated travel time from the traveller / reference
+    travel_mode: str | None = None
+    detour_min: int | None = None  # route-aware suggestions
+    conflicts: list[dict[str, str]] = field(default_factory=list)  # material disagreements between merged sources
+    confidence_detail: dict[str, Any] = field(default_factory=dict)
+    bars: dict[str, float] = field(default_factory=dict)  # what this place costs this traveller and whether it fits their budget
     opening_hours: dict[str, Any] | None = None
     opening_hours_text: str | None = None
     open_status: str = "unknown"  # open | closed | unknown
     open_detail: dict[str, Any] = field(default_factory=dict)
     entry_fee: float | None = None
+    entry_cost: str | None = None  # exact decimal text; what is displayed
     entry_fee_foreign: float | None = None
     fee_currency: str | None = None
     fee_notes: str | None = None
@@ -105,7 +127,7 @@ class Evidence:
 def candidate_from_poi(poi: Any, distance_km: float | None = None) -> Candidate:
     """Normalise a ``Poi`` ORM row."""
     hours = opening_hours.load(poi.opening_hours) or opening_hours.parse_osm(poi.opening_hours_raw)
-    source_type = "curated" if (poi.source or "").startswith("curated") else ("osm" if (poi.source or "") == "OpenStreetMap" else "database")
+    source_type = "curated" if (poi.source or "").startswith("curated") else "osm" if (poi.source or "") == "OpenStreetMap" else "dataset" if getattr(poi, "data_source_id", None) == "ps13" else "database"
     try:
         tags = json.loads(poi.tags or "[]")
     except ValueError:
@@ -124,9 +146,19 @@ def candidate_from_poi(poi: Any, distance_km: float | None = None) -> Candidate:
         tags=tags if isinstance(tags, list) else [],
         rating=poi.rating,
         review_count=poi.review_count,
+        popularity_score=getattr(poi, "popularity_score", None),
+        value_score=getattr(poi, "value_score", None),
+        carbon_kg=getattr(poi, "carbon_kg", None),
+        star_rating=getattr(poi, "star_rating", None),
+        guest_score=getattr(poi, "guest_score", None),
+        property_type=getattr(poi, "property_type", None),
+        checkin_time=getattr(poi, "checkin_time", None),
+        checkout_time=getattr(poi, "checkout_time", None),
+        distance_to_centre_km=getattr(poi, "distance_to_centre_km", None),
         opening_hours=hours,
         opening_hours_text=opening_hours.describe(hours) or poi.opening_hours_raw,
         entry_fee=poi.entry_fee,
+        entry_cost=getattr(poi, "entry_cost", None) or (f"{poi.entry_fee:.2f}" if poi.entry_fee is not None else None),
         entry_fee_foreign=poi.entry_fee_foreign,
         fee_currency=poi.fee_currency,
         fee_notes=poi.fee_notes,

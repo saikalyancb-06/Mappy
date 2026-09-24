@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { getNow } from '../api'
 import RichText from '../components/RichText'
+import SearchBox from '../components/SearchBox'
 import { AdvisoryList, Chip, IconCircleButton, Notices, PlaceCard, SectionTitle, StateMessage, WeatherPill } from '../components/ui'
 import { formatMinutes, localTimeLabel } from '../format'
 
-export default function NowView({ context, language, interests, onOpen, onSave, savedIds, userName }) {
+export default function NowView({ onChooseDestination, context, language, interests, onOpen, onSave, savedIds, userName }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -37,6 +38,7 @@ export default function NowView({ context, language, interests, onOpen, onSave, 
   const reference = data?.geo_context?.reference
   return <div className="view-content">
     <header className="app-header"><div><span className="eyebrow">Right now</span><h1>Hi{userName ? ` ${userName.split(' ')[0]}` : ''} <span className="wave">👋</span></h1></div><WeatherPill weather={weather} /></header>
+    <SearchBox context={context} onPlace={onOpen} onDestination={onChooseDestination} />
     <section className="destination-heading">
       <span className="country-label">{reference?.origin === 'user_location' ? 'Around you' : 'Exploring'}{place?.region ? ` · ${place.region}` : ''}</span>
       <h2>{place?.name || reference?.label || '…'}</h2>

@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  BedDouble,
   Bookmark,
   Clock,
   Compass,
@@ -10,11 +11,14 @@ import {
   MessageCircle,
   Navigation,
   Route,
+  ShieldCheck,
   Star,
   Ticket,
+  Timer,
   UserRound,
+  Wallet,
 } from 'lucide-react'
-import { formatDistance, formatMinutes, formatMoney, openLabel, titleCase } from '../format'
+import { formatDistance, formatMinutes, openLabel, titleCase } from '../format'
 
 const tabs = [
   { id: 'now', label: 'Now', Icon: Home },
@@ -39,43 +43,81 @@ export function SectionTitle({ eyebrow, children, action }) {
 export function WeatherPill({ weather }) {
   const ok = weather?.status === 'ok'
   const current = weather?.current
-  const summary = ok ? (current ? `${Math.round(current.temperature_c)}°C · ${current.summary}` : weather.day?.summary) : 'Unavailable'
-  return <div className="weather-pill" title={ok ? `Open-Meteo, updated ${weather.retrieved_at || ''}` : 'Live weather unavailable'}><span className="weather-symbol">{ok ? '☼' : '–'}</span><span><small>Weather</small><strong>{summary}</strong></span></div>
+  const summary = ok ? (current ? `${Math.round(current.temperature_c)}°C · ${current.summary}` : `${weather.day?.summary}${weather.live === false ? ' (dataset)' : ''}`) : 'Unavailable'
+  return <div className="weather-pill" title={ok ? (weather.live === false ? weather.note : `Open-Meteo, updated ${weather.retrieved_at || ''}`) : 'Live weather unavailable'}><span className="weather-symbol">{ok ? '☼' : '–'}</span><span><small>{weather?.live === false ? 'Weather (not live)' : 'Weather'}</small><strong>{summary}</strong></span></div>
 }
 
+const SOURCE_LABEL = { curated: 'Verified data', serpapi_maps: 'Live search', serpapi_hotels: 'Live rates', osm: 'OpenStreetMap', dataset: 'Organiser dataset', database: 'Stored data' }
+
 export function SourceBadge({ place }) {
-  const types = new Set((place.sources || []).map((source) => source.source_type))
-  const label = types.has('curated') ? 'Verified data' : types.has('serpapi_maps') ? 'Live search' : types.has('osm') ? 'OpenStreetMap' : 'Stored data'
-  return <span className={`source-badge ${types.has('curated') ? 'verified' : ''}`}>{label}{types.size > 1 ? ` +${types.size - 1}` : ''}</span>
+  const types = [...new Set((place.sources || []).map((source) => source.source_type))]
+  const label = SOURCE_LABEL[types[0]] || 'Stored data'
+  return <span className={`source-badge ${types[0] === 'curated' ? 'verified' : ''}`}>{label}{types.length > 1 ? ` +${types.length - 1}` : ''}</span>
+}
+
+export function ConfidenceBadge({ place }) {
+  const label = place.confidence_detail?.label
+  if (!label) return null
+  return <span className={`confidence-badge conf-${label}`} title={Object.entries(place.confidence_detail.parts || {}).map(([key, part]) => `${key}: ${part.label} — ${part.note}`).join('\n')}><ShieldCheck size={12} /> {titleCase(label)} confidence</span>
+}
+
+export function CostChip({ place }) {
+  const cost = place.cost_for_user || {}
+  if (!cost.display && cost.kind !== 'unknown') return null
+  const text = cost.kind === 'unknown' ? (place.kind === 'stay' ? 'Price n/a' : 'Cost unverified') : `${cost.display}${cost.kind === 'per_night' ? '/night' : ''}`
+  const fit = cost.fits_budget === true ? 'fits' : cost.fits_budget === false ? 'over' : ''
+  return <span className={`cost-chip ${fit}`} title={cost.note || ''}><Wallet size={12} />{text}{fit === 'fits' ? ' · in budget' : fit === 'over' ? ' · over budget' : ''}</span>
 }
 
 export function PlaceFacts({ place, showUserDistance = true }) {
-  const fee = formatMoney(place.entry_fee, place.fee_currency)
   const open = openLabel(place)
   return <div className="place-meta">
     {place.distance_km != null && <span><Navigation size={13} />{formatDistance(place.distance_km)}</span>}
     {showUserDistance && place.distance_from_user_km != null && <span title="From your current location"><MapPin size={13} />{formatDistance(place.distance_from_user_km)} from you</span>}
+    {place.detour_min != null ? <span><Timer size={13} />+{place.detour_min} min detour</span> : place.travel_min != null && place.travel_mode && <span title="Estimate from straight-line distance"><Timer size={13} />~{place.travel_min} min {place.travel_mode}</span>}
     {open && <span className={place.open_status === 'open' ? 'open-yes' : 'open-no'}><Clock size={13} />{open}</span>}
-    {fee && <span><Ticket size={13} />{fee}</span>}
-    {place.visit_duration_min != null && <span>{formatMinutes(place.visit_duration_min)} visit</span>}
-    {place.rating != null && <span><Star size={13} />{place.rating.toFixed(1)}{place.review_count ? ` (${place.review_count.toLocaleString()})` : ''}</span>}
+    <CostChip place={place} />
+    {place.visit_duration_min != null && place.kind !== 'stay' && <span><Ticket size={13} />{formatMinutes(place.visit_duration_min)} visit</span>}
+    {place.star_rating ? <span>{'★'.repeat(place.star_rating)}</span> : null}
+    {place.guest_score != null ? <span><Star size={13} />{place.guest_score.toFixed(1)}/10{place.review_count ? ` (${place.review_count.toLocaleString()})` : ''}</span> : place.rating != null && <span><Star size={13} />{place.rating.toFixed(1)}{place.review_count ? ` (${place.review_count.toLocaleString()})` : ''}</span>}
     {place.step_free === true && <span>♿ Step-free</span>}
   </div>
 }
 
+export function ConflictNote({ place }) {
+  if (!place.conflicts?.length) return null
+  return <p className="conflict-note"><AlertTriangle size={14} /> Sources disagree: {place.conflicts.map((c) => c.detail).join('; ')}. Verify before travelling.</p>
+}
+
 export function PlaceCard({ place, featured = false, onOpen, saved = false, onSave }) {
   return <article className={`place-card ${featured ? 'featured' : ''}`}>
-    <div className="place-art"><MapPin size={featured ? 34 : 26} /></div>
+    <div className="place-art">{place.kind === 'stay' ? <BedDouble size={featured ? 34 : 26} /> : <MapPin size={featured ? 34 : 26} />}</div>
     <div className="place-content">
       <div className="place-heading">
-        <div><span className="category-label">{titleCase(place.category || place.kind || 'place')} · <SourceBadge place={place} /></span><h3>{place.name}</h3></div>
+        <div><span className="category-label">{titleCase(place.property_type || place.category || place.kind || 'place')} · <SourceBadge place={place} /></span><h3>{place.name}</h3></div>
         {onSave && <button className={`save-button ${saved ? 'saved' : ''}`} aria-label={`${saved ? 'Remove' : 'Save'} ${place.name}`} onClick={() => onSave(place)} type="button"><Bookmark size={18} fill={saved ? 'currentColor' : 'none'} /></button>}
       </div>
       <PlaceFacts place={place} />
+      <ConfidenceBadge place={place} />
+      <ConflictNote place={place} />
       {place.reasons?.length > 0 && <p>{place.reasons.slice(0, 2).join(' · ')}</p>}
-      {onOpen && <button className="text-action" onClick={() => onOpen(place)} type="button">View place <ArrowRight size={16} /></button>}
+      {onOpen && <button className="text-action" onClick={() => onOpen(place)} type="button">Why this place <ArrowRight size={16} /></button>}
     </div>
   </article>
+}
+
+const BAR_LABELS = { distance: 'Distance', rating: 'Rating', cost: 'Cost', quietness: 'Quietness', convenience: 'Convenience', fit: 'Fits you' }
+
+export function WhyBars({ bars }) {
+  if (!bars || !Object.keys(bars).length) return null
+  return <div className="why-bars">{Object.entries(BAR_LABELS).filter(([key]) => bars[key] != null).map(([key, label]) => <div className="why-bar" key={key}>
+    <span>{label}</span><div className="why-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(bars[key] * 100)} aria-label={label}><span style={{ width: `${Math.round(bars[key] * 100)}%` }} /></div>
+  </div>)}</div>
+}
+
+export function ConfidenceList({ detail }) {
+  if (!detail?.parts) return null
+  return <ul className="confidence-list">{Object.entries(detail.parts).map(([key, part]) => <li key={key}><strong>{titleCase(key)}</strong><span className={`conf-${part.label}`}>{titleCase(part.label)}</span><small>{part.note}</small></li>)}</ul>
 }
 
 export function BottomTabBar({ activeTab, onChange }) {
@@ -91,17 +133,22 @@ export function StateMessage({ title, body, action }) {
 }
 
 export function Notices({ items }) {
-  const list = (items || []).filter(Boolean)
+  const list = [...new Set((items || []).filter(Boolean))]
   if (!list.length) return null
   return <div className="notices">{list.map((text) => <p key={text}><Info size={13} /> {text}</p>)}</div>
 }
 
-const SEVERITY = { high: 'High', moderate: 'Moderate', low: 'Low', info: 'Info' }
+export function Understood({ items }) {
+  if (!items?.length) return null
+  return <div className="understood"><span className="eyebrow">Understood</span><div className="chip-row wrap">{items.map((item) => <span className="understood-chip" key={item}>{item}</span>)}</div></div>
+}
+
+const SEVERITY = { severe: 'Severe', high: 'High', warning: 'Warning', caution: 'Caution', moderate: 'Moderate', advisory: 'Advisory', low: 'Low', info: 'Info' }
 
 export function AdvisoryList({ advisories }) {
   if (!advisories?.length) return <p className="muted-text">No active advisories are recorded for this area.</p>
   return <div className="advisory-list">{advisories.map((item) => <div className={`advisory severity-${item.severity}`} key={item.id}>
     <AlertTriangle size={16} />
-    <div><strong>{item.title}</strong><span className="advisory-meta">{SEVERITY[item.severity] || item.severity} · {item.kind === 'weather_derived' ? 'from forecast' : item.source}</span>{item.body && <p>{item.body}</p>}</div>
+    <div><strong>{item.title}</strong><span className="advisory-meta">{SEVERITY[item.severity] || item.severity} · {item.kind === 'weather_derived' ? 'from forecast' : item.issuing_body || item.source}{item.valid_to ? ` · until ${item.valid_to.slice(0, 10)}` : ''}{item.language && !item.language.startsWith('en') ? ` · in ${item.language}` : ''}</span>{item.body && <p>{item.body}</p>}</div>
   </div>)}</div>
 }

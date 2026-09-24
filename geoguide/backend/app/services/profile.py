@@ -8,7 +8,7 @@ from app.db.models import User, UserPreference
 from app.db.session import SessionLocal
 from app.services.auth import verify_token
 
-DEFAULT_PROFILE: dict[str, Any] = {"interests": {}, "budget": None, "pace": None, "walking": None, "accessibility": [], "likes": [], "dislikes": [], "language": "en"}
+DEFAULT_PROFILE: dict[str, Any] = {"interests": {}, "budget": None, "max_daily_budget": None, "budget_currency": None, "pace": None, "walking": None, "travel_mode": None, "accessibility": [], "likes": [], "dislikes": [], "language": "en"}
 
 
 def user_from_authorization(authorization: str | None) -> User | None:
@@ -31,8 +31,11 @@ def preference_dict(preference: UserPreference) -> dict[str, Any]:
     return {
         "interests": load(preference.interests, {}),
         "budget": preference.budget,
+        "max_daily_budget": preference.max_daily_budget,
+        "budget_currency": preference.budget_currency,
         "pace": preference.pace,
         "walking": preference.walking,
+        "travel_mode": preference.travel_mode,
         "accessibility": load(preference.accessibility, []),
         "likes": load(preference.likes, []),
         "dislikes": load(preference.dislikes, []),
