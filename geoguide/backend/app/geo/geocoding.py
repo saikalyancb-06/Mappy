@@ -296,14 +296,28 @@ def reverse_geocode(lat: float, lon: float) -> tuple[dict[str, Any] | None, list
     return result, []
 
 
-def search_destinations(query: str | None, limit: int = 10) -> list[dict[str, Any]]:
+def search_destinations(query: str | None, limit: int = 10, near: tuple[float, float] | None = None) -> list[dict[str, Any]]:
+    """Stored destinations for a picker: matching names/aliases (prefixes first), then closest to ``near``."""
+    target = normalize(query or "")
     with SessionLocal() as db:
         destinations = db.scalars(select(Destination)).all()
         poi_counts = {d.id: db.query(Poi).filter(Poi.destination_id == d.id).count() for d in destinations}
     rows = []
     for destination in destinations:
-        score = name_similarity(query, destination.name) if query else 1.0
+        names = [destination.name, *destination_aliases(destination)]
+        if target:
+            normalised = [normalize(name) for name in names]
+            prefix = any(name.startswith(target) or any(word.startswith(target) for word in name.split()) for name in normalised)
+            region = normalize(destination.region or "")
+            in_region = bool(region) and (region.startswith(target) or any(word.startswith(target) for word in region.split()))
+            score = 1.0 if prefix else 0.9 if in_region else (max(name_similarity(target, name) for name in names) if len(target) >= 4 else 0.0)
+            if score < 0.7:
+                continue
+        else:
+            score = 1.0
+        distance = haversine_km(near[0], near[1], destination.lat, destination.lon) if near else None
         languages = json.loads(destination.languages or "[]")
-        rows.append((score, {"id": destination.id, "name": destination.name, "region": destination.region, "country": destination.country, "lat": destination.lat, "lon": destination.lon, "coverage_radius_km": destination.coverage_radius_km, "timezone": destination.timezone, "languages": languages, "curated": bool(destination.curated), "poi_count": poi_counts.get(destination.id, 0), "summary": destination.summary}))
-    rows.sort(key=lambda item: item[0], reverse=True)
-    return [row for score, row in rows if not query or score >= 0.5][:limit]
+        rows.append((score, distance, {"id": destination.id, "name": destination.name, "region": destination.region, "country": destination.country, "lat": destination.lat, "lon": destination.lon, "coverage_radius_km": destination.coverage_radius_km, "timezone": destination.timezone, "languages": languages, "curated": bool(destination.curated), "poi_count": poi_counts.get(destination.id, 0), "summary": destination.summary, "distance_km": round(distance, 1) if distance is not None else None}))
+    # Best match first; among equals, the closest (or, without a location, the best-covered).
+    rows.sort(key=lambda item: (-item[0], item[1] if item[1] is not None else 0.0, -item[2]["poi_count"], item[2]["name"]))
+    return [row for _, _, row in rows][:limit]

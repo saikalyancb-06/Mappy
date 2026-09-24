@@ -423,3 +423,12 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .submission-card textarea { width: 100%; border-radius: 12px; border: 1px solid var(--line); padding: 8px 10px; font: inherit; }
 .submission-card.status-approved .category-label { color: var(--forest); }
 .submission-card.status-rejected .category-label { color: #a0402b; }
+
+/* start screen: location shortcut and live destination list */
+.location-cta { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 20px; background: var(--forest); color: white; text-align: left; }
+.location-cta span { flex: 1; display: grid; gap: 2px; }
+.location-cta strong { font-size: 16px; }
+.location-cta small { opacity: .8; font-size: 12px; font-weight: 600; }
+.location-cta:disabled { opacity: .7; }
+.destination-list-title { margin-bottom: -10px; }
+.destination-option.is-here { outline: 2px solid var(--forest); }
