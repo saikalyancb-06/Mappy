@@ -12,6 +12,7 @@ from app.events.model import EventQuery, EventSource, NormalisedEvent
 from app.events.providers.base import EventProvider, ProviderResult
 from app.events.sources import domain
 from app.events.taxonomy import categorise, price_from_text
+from app.geo.city import country_code
 from app.search.serpapi import SearchProviderError, SearchResult, SerpApiClient, client as default_client
 
 
@@ -58,7 +59,7 @@ class GoogleEventsProvider(EventProvider):
             text += f" {query.window.start.strftime('%B %Y')}" if query.window.start.month == query.window.end.month else f" {query.window.start.strftime('%B %d')} to {query.window.end.strftime('%B %d %Y')}"
         result.queries.append(text)
         try:
-            response = self.web.search(text, engine="google_events", limit=20, extra={"htichips": chip, "gl": (query.city.country_code or "").lower() or None})
+            response = self.web.search(text, engine="google_events", limit=20, extra={"htichips": chip, "gl": (country_code(query.city) or "").lower() or None})
         except SearchProviderError as exc:
             result.status, result.error = "error", exc.as_dict()
             result.latency_ms = int((self._timed() - started) * 1000)

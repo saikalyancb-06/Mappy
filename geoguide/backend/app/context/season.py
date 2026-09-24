@@ -5,13 +5,12 @@ from datetime import date
 from typing import Any
 
 from app.core.rules import load_rules
-from app.core.text import normalize
-from app.geo.city import City
+from app.geo.city import City, country_code
 
 
 def season_for(city: City, day: date) -> dict[str, Any]:
     rules = load_rules("seasons")
-    code = (city.country_code or rules["country_codes"].get(normalize(city.country or ""), "")).upper()
+    code = (country_code(city) or "").upper()
     calendar = rules["by_country"].get(code) or (rules["southern"] if city.lat < 0 else rules["northern"])
     name = next((season for season, months in calendar.items() if day.month in months), None)
     peak = bool(city.peak_months and day.month in city.peak_months)

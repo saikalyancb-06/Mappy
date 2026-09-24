@@ -41,7 +41,7 @@ class TicketmasterProvider(EventProvider):
         return bool(self.api_key)
 
     def health_check(self) -> dict[str, Any]:
-        return {"provider": self.name, "configured": self.configured, "note": None if self.configured else "Set TICKETMASTER_API_KEY on the server to enable."}
+        return {"provider": self.name, "configured": self.configured, "countries": self.coverage() or "all", "note": None if self.configured else "Set TICKETMASTER_API_KEY on the server to enable."}
 
     def _params(self, query: EventQuery, page: int) -> dict[str, Any]:
         params: dict[str, Any] = {

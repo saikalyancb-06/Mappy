@@ -162,12 +162,16 @@ intent (app/events/intent.py: categories, free, festivals, near me)
 
 `EventProvider` defines `search_events(query) → ProviderResult`, `get_event(id)` and `health_check()`. Adding a provider means adding a class to `default_providers()`; ranking doesn't change. A provider that fails or throws is reported (`status: error`) and the others still answer. Past dates skip live providers (`not_applicable`).
 
+**Country coverage.** `events.json → provider_coverage` lists the countries each provider actually serves; an empty list means everywhere. A provider outside its countries is skipped before any request is made and reported as `not_applicable` (`no_coverage`). Ticketmaster is limited to the markets it sells in (US, Canada, Mexico, UK, Ireland, Australia/NZ, much of Europe, UAE, South Africa), so it is **not used for India**. The country comes from the city's stored ISO code, or from its country name via `data/config/countries.json`.
+
+**Local event platforms.** For countries listed in `events.json → country_sources`, the web fallback adds a search restricted to that country's ticketing and listing sites. India uses BookMyShow, District, Insider, Skillboxes, Townscript and AllEvents. None of these offers a public API, so their listings arrive through Google Events and site-restricted web search, and they go through the same single-event and date validation as any other page. Google Events is also localised with the city's country (`gl`).
+
 | Provider | Needs | Reliability |
 |---|---|---|
 | Stored (curated / dataset) | nothing | 0.8 / 0.55 |
-| Ticketmaster | `TICKETMASTER_API_KEY` | 0.9 |
+| Ticketmaster | `TICKETMASTER_API_KEY`; only in covered countries (not India) | 0.9 |
 | Google Events | `SERPAPI_KEY` | 0.65 |
-| Web pages | `SERPAPI_KEY` | official 0.85 · event platform 0.7 · news 0.6 · aggregator 0.4 · unknown 0.35 |
+| Web pages (+ country platforms such as BookMyShow and District) | `SERPAPI_KEY` | official 0.85 · event platform 0.7 · news 0.6 · aggregator 0.4 · unknown 0.35 |
 
 Keys stay on the server. `GET /api/events/providers` reports only whether each provider is configured. `httpx` request logging is silenced because keys travel as query parameters.
 

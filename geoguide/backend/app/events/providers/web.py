@@ -18,6 +18,7 @@ from app.events.model import EventQuery, EventSource, NormalisedEvent
 from app.events.providers.base import EventProvider, ProviderResult
 from app.events.sources import domain, is_listicle, web_source_kind
 from app.events.taxonomy import categorise, price_from_text
+from app.geo.city import country_code
 from app.search.serpapi import SearchProviderError, SearchResult, SerpApiClient, client as default_client
 
 
@@ -30,6 +31,11 @@ def build_queries(query: EventQuery) -> list[str]:
     month_year = window.start.strftime("%B %Y")
     city = query.city.name
     queries: list[str] = []
+    sites = rules.get("country_sources", {}).get(country_code(query.city) or "", {}).get("sites", [])
+    if sites:
+        # Where global ticketing APIs don't reach (e.g. India), search the local event platforms directly.
+        topic = query.text or " ".join(rules["categories"][c]["label"].lower() for c in query.categories[:2]) or "events"
+        queries.append(f"{topic} {city} {when} (" + " OR ".join(f"site:{site}" for site in sites) + ")")
     if query.text:
         queries.append(f"{query.text} {city} {when}")
     for category in query.categories[:2]:

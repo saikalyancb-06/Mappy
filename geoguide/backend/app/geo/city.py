@@ -125,3 +125,12 @@ def city_from_place(place: Any) -> City:
         if city:
             return city
     return City(name=place.city or place.name, country=place.country, region=place.region, lat=place.lat, lon=place.lon, timezone=place.timezone, resolved_by="geocoder")
+
+
+def country_code(city: City) -> str | None:
+    """ISO alpha-2 for a city: its stored code, else looked up from the country name."""
+    if city.country_code:
+        return city.country_code.upper()
+    from app.core.rules import load_rules
+
+    return load_rules("countries")["names"].get(normalize(city.country or "")) if city.country else None

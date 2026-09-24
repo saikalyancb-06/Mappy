@@ -41,11 +41,23 @@ class EventProvider(ABC):
     def search_events(self, query: EventQuery) -> ProviderResult:
         """Events for the query's place and time range (already normalised)."""
 
+    def coverage(self) -> list[str]:
+        """ISO country codes with meaningful listings (events.json provider_coverage); empty = everywhere."""
+        from app.core.rules import load_rules
+
+        return list(load_rules("events").get("provider_coverage", {}).get(self.name, {}).get("countries", []))
+
+    def covers(self, query: EventQuery) -> bool:
+        from app.geo.city import country_code
+
+        countries = self.coverage()
+        return not countries or (country_code(query.city) or "") in countries
+
     def get_event(self, event_id: str, query: EventQuery | None = None) -> NormalisedEvent | None:
         return None
 
     def health_check(self) -> dict[str, Any]:
-        return {"provider": self.name, "configured": self.configured}
+        return {"provider": self.name, "configured": self.configured, "countries": self.coverage() or "all"}
 
     def _timed(self) -> float:
         return time.monotonic()

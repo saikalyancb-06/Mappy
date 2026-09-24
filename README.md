@@ -28,7 +28,7 @@ Put your keys in `geoguide/backend/.env`. They stay on the server and are never 
 ```
 GROQ_API_KEY=gsk_...
 SERPAPI_KEY=...
-TICKETMASTER_API_KEY=...        # optional: structured event listings where Ticketmaster has coverage
+TICKETMASTER_API_KEY=...        # optional: structured listings in Ticketmaster markets (skipped for India)
 AUTH_SECRET=<any long random string>
 ```
 
@@ -194,6 +194,6 @@ The backend suite (190 tests) runs offline against a fictional destination ("Tes
 * The PS-13 dataset is synthetic. Its facts are treated as a medium-confidence source and labelled.
 * Hotel nightly rates need `SERPAPI_KEY`. Without it, hotels are ranked on class, guest score and distance and marked "price not available".
 * Travel times, fares and detours are straight-line estimates (haversine × detour factor) and are labelled as estimates. There is no routing engine.
-* Official city and tourism websites are not scraped as a separate source; they reach GeoGuide only through web event listings. Ticketmaster is used only when `TICKETMASTER_API_KEY` is set.
+* Official city and tourism websites are not scraped as a separate source; they reach GeoGuide only through web event listings. Ticketmaster is used only when `TICKETMASTER_API_KEY` is set, and only in the countries listed in `events.json → provider_coverage`. It is skipped for Indian cities, which rely on Google Events and on site-restricted searches of BookMyShow, District, Insider, Skillboxes, Townscript and AllEvents.
 * Past dates use stored records only; live listings cover today onwards. Beyond the 16-day forecast, weather is the dataset's record for that date or the average of the last 3 years, never a forecast.
 * Not built: image search, offline packs and environmental or habitat data. No data source for them is connected.

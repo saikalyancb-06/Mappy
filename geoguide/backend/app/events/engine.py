@@ -27,7 +27,7 @@ from app.events.providers.web import WebEventProvider
 from app.events.quality import assess, deduplicate, freshness
 from app.events.venues import enrich_venues
 from app.feedback.signals import user_vibes
-from app.geo.city import City
+from app.geo.city import City, country_code
 from app.geo.distance import haversine_km
 from app.geo.geo_context import destination_by_id
 from app.search.serpapi import SerpApiClient
@@ -153,6 +153,10 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
     results: list[ProviderResult] = []
 
     def run(provider: EventProvider) -> None:
+        if not provider.covers(query):
+            note = load_rules("events").get("provider_coverage", {}).get(provider.name, {}).get("skip_note", "{country}: not covered; skipped.")
+            results.append(ProviderResult(provider.name, provider.label, status="not_applicable", error={"source": provider.name, "code": "no_coverage", "message": note.format(country=query.city.country or country_code(query.city) or "this country")}))
+            return
         if provider.name != "stored" and query.end < now:
             results.append(ProviderResult(provider.name, provider.label, status="not_applicable", error={"source": provider.name, "code": "past_dates", "message": "Live listings only cover today onwards; past dates use stored records."}))
             return

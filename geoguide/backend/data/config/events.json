@@ -46,7 +46,7 @@
     "web_aggregator": 0.4,
     "web_unknown": 0.35,
     "authoritative_patterns": [".gov", ".gov.", "gov.in", "nic.in", "tourism", "official", ".museum", ".edu", ".ac."],
-    "platform_domains": ["ticketmaster.", "eventbrite.", "bookmyshow.com", "insider.in", "district.in", "meetup.com", "skillboxes.com", "townscript.com", "ticketnew.com", "songkick.com", "bandsintown.com", "timeout.com", "allevents.in"],
+    "platform_domains": ["ticketmaster.", "eventbrite.", "bookmyshow.com", "insider.in", "district.in", "meetup.com", "skillboxes.com", "townscript.com", "ticketnew.com", "songkick.com", "bandsintown.com", "timeout.com", "allevents.in", "in.bookmyshow.com", "mytickets.lk"],
     "news_domains": ["thehindu.com", "timesofindia", "indianexpress.com", "hindustantimes.com", "deccanherald.com", "ndtv.com", "bbc.", "news"],
     "aggregator_domains": ["allevents.in", "eventsfy", "whatsuplife", "happeningnext", "10times.com", "eventseye"],
     "listicle_patterns": ["top \\d+", "\\d+ best", "best events", "things to do", "events in [a-z ]+ (this|next)", "upcoming events in", "what's on in", "whats on in", "events happening in", "list of", "guide to", "calendar"]
@@ -84,5 +84,17 @@
     {"id": "family", "label": "Family", "categories": ["family"]},
     {"id": "free", "label": "Free events", "free": true}
   ],
-  "upcoming_days": 30
+  "upcoming_days": 30,
+  "provider_coverage": {
+    "_comment": "Countries where a provider has meaningful listings. A provider is skipped (and reported as not applicable) elsewhere, so no call is wasted. Edit as coverage changes; an empty list means 'everywhere'.",
+    "ticketmaster": {"countries": ["US", "CA", "MX", "GB", "IE", "AU", "NZ", "DE", "AT", "CH", "NL", "BE", "ES", "DK", "NO", "SE", "FI", "PL", "CZ", "AE", "ZA"], "skip_note": "Ticketmaster has little or no coverage in {country}; skipped."},
+    "google_events": {"countries": []},
+    "web": {"countries": []}
+  },
+  "country_sources": {
+    "_comment": "Event platforms that list local events well in a country. The web fallback adds a search restricted to these sites; they also count as established platforms for reliability.",
+    "IN": {"sites": ["in.bookmyshow.com", "district.in", "insider.in", "skillboxes.com", "townscript.com", "allevents.in"], "gl": "in"},
+    "LK": {"sites": ["mytickets.lk", "allevents.in"], "gl": "lk"},
+    "NP": {"sites": ["allevents.in"], "gl": "np"}
+  }
 }

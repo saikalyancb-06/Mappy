@@ -1,0 +1,11 @@
+{
+  "_comment": "Country name → ISO 3166-1 alpha-2, for places whose country comes from a geocoder name rather than a stored code.",
+  "names": {
+    "india": "IN", "nepal": "NP", "bhutan": "BT", "sri lanka": "LK", "maldives": "MV", "bangladesh": "BD", "pakistan": "PK",
+    "thailand": "TH", "malaysia": "MY", "singapore": "SG", "indonesia": "ID", "japan": "JP", "united arab emirates": "AE", "uae": "AE",
+    "qatar": "QA", "united states": "US", "united states of america": "US", "usa": "US", "canada": "CA", "mexico": "MX",
+    "united kingdom": "GB", "uk": "GB", "ireland": "IE", "australia": "AU", "new zealand": "NZ", "germany": "DE", "austria": "AT",
+    "switzerland": "CH", "netherlands": "NL", "belgium": "BE", "spain": "ES", "france": "FR", "italy": "IT", "denmark": "DK",
+    "norway": "NO", "sweden": "SE", "finland": "FI", "poland": "PL", "czechia": "CZ", "czech republic": "CZ", "south africa": "ZA"
+  }
+}

@@ -9,6 +9,5 @@
     "TH": {"cool season": [11, 12, 1, 2], "hot season": [3, 4, 5], "rainy season": [6, 7, 8, 9, 10]}
   },
   "northern": {"winter": [12, 1, 2], "spring": [3, 4, 5], "summer": [6, 7, 8], "autumn": [9, 10, 11]},
-  "southern": {"summer": [12, 1, 2], "autumn": [3, 4, 5], "winter": [6, 7, 8], "spring": [9, 10, 11]},
-  "country_codes": {"india": "IN", "nepal": "NP", "bhutan": "BT", "sri lanka": "LK", "maldives": "MV", "thailand": "TH"}
+  "southern": {"summer": [12, 1, 2], "autumn": [3, 4, 5], "winter": [6, 7, 8], "spring": [9, 10, 11]}
 }
