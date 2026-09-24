@@ -141,5 +141,7 @@
     "rain_probability": 60
   },
   "max_stops": 8,
-  "_comment_modes": "A traveller-chosen mode (walk, bicycle, motorbike, car, auto, transit) replaces auto-rickshaw for longer legs; walking is still used for short hops unless less_walking."
+  "_comment_modes": "A traveller-chosen mode (walk, bicycle, motorbike, car, auto, transit) replaces auto-rickshaw for longer legs; walking is still used for short hops unless less_walking.",
+  "sunset_lead_min": 45,
+  "max_first_wait_min": 90
 }

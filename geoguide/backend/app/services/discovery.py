@@ -47,6 +47,7 @@ class DiscoveryRequest:
     avoid_tags: set[str] = field(default_factory=set)
     within_budget: bool = False
     constraints: Any = None  # app.query.constraints.Constraints
+    include_tags: set[str] = field(default_factory=set)  # places with these tags match too (e.g. a "sunset spot" tagged sunset)
     travel_origin: tuple[float, float] | None = None
 
 
@@ -105,6 +106,7 @@ def apply_constraints(request: DiscoveryRequest) -> None:
         for group in c.include_groups:
             cats.update(group_categories(group))
         request.categories = cats
+    request.include_tags = set(request.include_tags) | set(c.include_tags)
     request.exclude_categories = set(request.exclude_categories) | set(c.exclude_categories)
     request.avoid_tags = set(request.avoid_tags) | set(c.avoid_tags)
     request.preferences = list(dict.fromkeys([*request.preferences, *c.preferences]))
@@ -120,12 +122,40 @@ def apply_constraints(request: DiscoveryRequest) -> None:
         request.reference.radius_km = round(max(request.reference.radius_km, reach) if request.reference.semantic == "near_me" else min(request.reference.radius_km, max(reach, 0.5)), 2)
 
 
+def matches_wish(candidate: Candidate, item: dict[str, Any]) -> bool:
+    """A place matches a wish by category, or by tag when it is the right kind of place for it
+    (a sunset-tagged lake is a sunset spot; a sunset-tagged bar is not)."""
+    if candidate.category in item["categories"]:
+        return True
+    allowed = item.get("tag_categories")
+    return bool(set(candidate.tags or []) & set(item["tags"])) and (not allowed or candidate.category in allowed)
+
+
+def interleave_by_wish(ranked: list[Candidate], wishes: list[dict[str, Any]]) -> list[Candidate]:
+    """Take turns between the things asked for, so one category can't crowd out the rest."""
+    buckets: list[list[Candidate]] = [[] for _ in wishes]
+    rest: list[Candidate] = []
+    for candidate in ranked:
+        index = next((i for i, item in enumerate(wishes) if matches_wish(candidate, item)), None)
+        (buckets[index] if index is not None else rest).append(candidate)
+    out: list[Candidate] = []
+    while any(buckets):
+        for bucket in buckets:
+            if bucket:
+                out.append(bucket.pop(0))
+    return out + rest
+
+
 def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApiClient | None = None) -> DiscoveryResult:
     web = web or default_client
     config = load_rules("ranking")
     apply_constraints(request)
     reference = request.reference
     categories, kinds = _category_filter(request)
+    wished: set[str] | None = None
+    if categories and request.include_tags:
+        # Match on category OR tag: fetch every attraction and filter after merging sources.
+        wished, categories, kinds = set(categories), None, request.kinds or set(load_rules("taxonomy")["attraction_kinds"])
     errors: list[dict[str, str]] = []
     counts = {"database": 0, "osm_fetched": 0, "web": 0, "duplicates_merged": 0}
 
@@ -161,6 +191,9 @@ def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApi
             errors.append({"source": "serpapi", "code": "web_search_unavailable", "message": "Web search is not configured; showing stored places only."})
 
     merged, duplicates = aggregate([internal, web_candidates])
+    if wished is not None:
+        wishes = (request.constraints.wishes if request.constraints is not None else None) or []
+        merged = [c for c in merged if c.category in wished or any(matches_wish(c, item) for item in wishes)]
     counts["duplicates_merged"] = duplicates
     semantic = _semantic_scores(request) if (request.preferences or request.query_text) else {}
     rank_request = RankRequest(
@@ -196,6 +229,9 @@ def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApi
         limit = request.constraints.limit
         confident = [c for c in ranked if c.confidence_detail.get("label") != "low"]
         ranked = confident or ranked
+    wishes = (request.constraints.wishes if request.constraints is not None else None) or []
+    if len(wishes) > 1:
+        ranked = interleave_by_wish(ranked, wishes)
     result.ranked = ranked
     if trace:
         trace.step(

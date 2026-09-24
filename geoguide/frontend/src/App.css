@@ -341,3 +341,40 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .sources-checked { color: var(--muted); font-size: 13px; }
 .sources-checked ul { margin: 6px 0 0; padding-left: 18px; }
 .ask-events { display: grid; gap: 10px; margin-top: 8px; }
+
+/* ---- Plan: swipe deck ---- */
+.swipe-deck { display: grid; gap: 12px; outline: none; }
+.swipe-deck:focus-visible { box-shadow: 0 0 0 3px var(--lime); border-radius: 28px; }
+.swipe-status { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; font-weight: 700; }
+.swipe-tally { display: inline-flex; align-items: center; gap: 4px; }
+.swipe-stack { position: relative; height: 470px; }
+.swipe-card { position: absolute; inset: 0; display: grid; grid-template-rows: 170px 1fr; border-radius: 28px; overflow: hidden; background: #fff; box-shadow: var(--shadow); touch-action: pan-y; user-select: none; }
+.swipe-card.top { cursor: grab; }
+.swipe-card.top:active { cursor: grabbing; }
+.swipe-art { position: relative; padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; background: linear-gradient(135deg, #b8d8c0, #6f9f7e); }
+.swipe-art.art-heritage { background: linear-gradient(135deg, #f1d9a7, #c98b4b); }
+.swipe-art.art-water { background: linear-gradient(135deg, #b9dff0, #4f8fb8); }
+.swipe-art.art-nature { background: linear-gradient(135deg, #cfe8b5, #5f9c5a); }
+.swipe-art.art-city, .swipe-art.art-food { background: linear-gradient(135deg, #f5c9b8, #c46f5a); }
+.swipe-category, .swipe-wish { padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.85); color: var(--forest); font-size: 12px; font-weight: 800; }
+.swipe-wish { background: var(--forest); color: white; }
+.swipe-stamp { position: absolute; top: 60px; left: 50%; transform: translateX(-50%) rotate(-12deg); padding: 6px 16px; border: 4px solid; border-radius: 12px; font-size: 30px; font-weight: 900; letter-spacing: .08em; background: rgba(255,255,255,.7); }
+.swipe-stamp.like { color: #2f8a3b; border-color: #2f8a3b; }
+.swipe-stamp.pass { color: #c0392b; border-color: #c0392b; }
+.swipe-body { display: grid; align-content: start; gap: 10px; padding: 16px 18px; overflow: hidden; }
+.swipe-body h3 { font-size: 22px; }
+.swipe-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.swipe-reasons { margin: 0; padding-left: 18px; color: var(--ink); font-size: 14px; display: grid; gap: 3px; }
+.swipe-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center; padding: 24px; border-radius: 28px; background: var(--white-glass); border: 1px dashed rgba(14,42,26,.25); color: var(--forest); }
+.swipe-empty p { color: var(--muted); font-size: 14px; }
+.swipe-actions { display: flex; justify-content: center; align-items: center; gap: 22px; }
+.swipe-button { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); }
+.swipe-button.pass { color: #c0392b; }
+.swipe-button.like { color: #2f8a3b; }
+.swipe-button.undo { width: 44px; height: 44px; color: var(--muted); }
+.coverage-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.coverage-chip { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.coverage-chip.ok { background: #dcefd9; color: #2f6b36; }
+.coverage-chip.miss { background: #f7dcd6; color: #9b3326; }
+.timing-note { display: flex; align-items: center; gap: 5px; color: #b0632a !important; font-weight: 700; font-size: 13px; }
+.swipe-body .link-button { justify-self: start; font-size: 14px; }

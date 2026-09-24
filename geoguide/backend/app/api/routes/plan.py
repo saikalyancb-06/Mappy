@@ -68,3 +68,29 @@ def plan(payload: dict | None, authorization: str | None = Header(default=None))
     trace.emit()
     plan_data.pop("_candidates", None)
     return {"plan": plan_data, "weather": weather, "geo_context": geo.as_dict(), "provider_errors": errors, "request_id": trace.request_id}
+
+
+@router.post("/plan/deck")
+def plan_deck(payload: dict | None, authorization: str | None = Header(default=None)) -> dict:
+    """Candidate cards for the swipe deck: the same pool the plan is built from, taking turns between wishes.
+
+    Swiping right adds a card to ``locked_ids`` (must include); left adds it to ``excluded_ids``.
+    """
+    safe = payload or {}
+    origin = str(safe.get("origin") or "auto")
+    geo = geo_for(origin if origin in {"auto", "user", "destination"} else "auto", safe.get("user_location") if isinstance(safe.get("user_location"), dict) else None, safe.get("active_destination"))
+    profile = resolve_profile(authorization, safe.get("profile") if isinstance(safe.get("profile"), dict) else None)
+    trace = Trace("plan_deck")
+    deck, weather, errors = build_plan(
+        geo=geo,
+        profile=profile,
+        duration_key="full",
+        day_offset=max(0, min(int(safe.get("day_offset") or 0), 6)),
+        locked_ids=[str(i) for i in safe.get("locked_ids") or []],
+        excluded_ids=[str(i) for i in safe.get("excluded_ids") or []],
+        wishes=str(safe.get("wishes") or "").strip()[:500] or None,
+        trace=trace,
+        deck=True,
+    )
+    trace.emit()
+    return {**deck, "geo_context": geo.as_dict(), "provider_errors": errors, "request_id": trace.request_id}

@@ -562,6 +562,117 @@
       "it's raining",
       "its raining",
       "rain"
+    ],
+    "spots": {
+      "sunset": {
+        "label": "sunset spot",
+        "phrases": [
+          "sunset spot",
+          "sunset spots",
+          "sunset point",
+          "sunset points",
+          "sunset view",
+          "sunset views",
+          "sunset viewpoint",
+          "place to watch the sunset",
+          "watch the sunset",
+          "see the sunset",
+          "catch the sunset"
+        ],
+        "categories": [
+          "viewpoint"
+        ],
+        "tags": [
+          "sunset"
+        ],
+        "timing": "late",
+        "tag_categories": [
+          "viewpoint",
+          "lake",
+          "beach",
+          "park",
+          "monument",
+          "temple",
+          "wildlife"
+        ]
+      },
+      "sunrise": {
+        "label": "sunrise spot",
+        "phrases": [
+          "sunrise spot",
+          "sunrise spots",
+          "sunrise point",
+          "sunrise view",
+          "sunrise viewpoint",
+          "watch the sunrise",
+          "see the sunrise",
+          "catch the sunrise"
+        ],
+        "categories": [
+          "viewpoint"
+        ],
+        "tags": [
+          "sunrise"
+        ],
+        "timing": "early",
+        "tag_categories": [
+          "viewpoint",
+          "lake",
+          "beach",
+          "park",
+          "monument",
+          "temple",
+          "wildlife"
+        ]
+      }
+    },
+    "quantity_words": {
+      "a couple of": 2,
+      "couple of": 2,
+      "a": 1,
+      "an": 1,
+      "one": 1,
+      "single": 1,
+      "the": 1,
+      "two": 2,
+      "three": 3,
+      "four": 4
+    },
+    "wish_fillers": [
+      "i want",
+      "i'd like",
+      "i would like",
+      "want",
+      "visit",
+      "see",
+      "go to",
+      "maybe",
+      "also",
+      "including",
+      "include",
+      "plus",
+      "then",
+      "and",
+      "some",
+      "like",
+      "to"
+    ],
+    "budget_words": [
+      "budget of",
+      "budget is",
+      "budget",
+      "under",
+      "below",
+      "within",
+      "max",
+      "maximum",
+      "up to",
+      "upto",
+      "less than",
+      "spend",
+      "spending",
+      "capped at",
+      "not more than"
     ]
   }
 }

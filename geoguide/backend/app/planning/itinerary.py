@@ -38,6 +38,8 @@ class PlanRequest:
     travel_mode: str | None = None  # traveller's own transport for longer legs
     end_label: str | None = None
     understood: list[str] = field(default_factory=list)
+    not_before: dict[str, datetime] = field(default_factory=dict)  # e.g. a sunset spot is reached shortly before sunset
+    timing_notes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -108,6 +110,11 @@ def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | 
         arrive = clock + timedelta(minutes=leg.minutes + (config["buffer_min"] if stops else 0))
         visit = _visit_minutes(candidate)
         wait = 0
+        free = 0
+        target = request.not_before.get(candidate.id)
+        if target and arrive < target:
+            free = int((target - arrive).total_seconds() // 60)  # chosen free time, not a wait for opening
+            arrive = target
         hours = candidate.opening_hours
         open_check = "hours_unknown"
         if hours:
@@ -116,8 +123,8 @@ def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | 
                 opens = datetime.strptime(status["opens_at"], "%H:%M").time()
                 opens_dt = arrive.replace(hour=opens.hour, minute=opens.minute, second=0, microsecond=0)
                 wait = int((opens_dt - arrive).total_seconds() // 60)
-                if wait > config["max_wait_for_opening_min"]:
-                    return None
+                if wait > (config["max_first_wait_min"] if not stops else config["max_wait_for_opening_min"]):
+                    return None  # the first stop may start the day a little later, at its opening time
                 arrive = opens_dt
             ok = opening_hours.open_for_window(hours, arrive, arrive + timedelta(minutes=visit))
             if ok is False:
@@ -142,7 +149,7 @@ def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | 
             totals["cost_unknown_items"] += (leg.cost is None) + (entry_cost is None)
         totals["cost"] += (leg.cost or 0.0) + (entry_cost or 0.0)
         totals["value"] += value
-        stops.append({"candidate": candidate, "leg": leg, "arrive": arrive, "depart": depart, "visit_min": visit, "wait_min": wait, "open_check": open_check, "weather_note": weather_note, "value": value})
+        stops.append({"candidate": candidate, "leg": leg, "arrive": arrive, "depart": depart, "visit_min": visit, "wait_min": wait, "free_min": free, "open_check": open_check, "weather_note": weather_note, "value": value})
         clock = depart
         position = (candidate.lat, candidate.lon)
     totals["end"] = clock
@@ -163,11 +170,18 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
     order: list[Candidate] = []
     unscheduled: list[dict[str, Any]] = []
     for candidate in locked:
-        trial = order + [candidate]
-        if _simulate(trial, request) is None:
+        # Must-sees have no order of their own: put each where it fits best (a sunset spot's
+        # not-before time still pushes it late).
+        fits = []
+        for index in range(len(order) + 1):
+            trial = order[:index] + [candidate] + order[index:]
+            simulation = _simulate(trial, request)
+            if simulation is not None:
+                fits.append((_objective(simulation, request), index))
+        if not fits:
             unscheduled.append({"id": candidate.id, "name": candidate.name, "reason": "locked stop does not fit the time window or opening hours"})
         else:
-            order = trial
+            order.insert(max(fits)[1], candidate)
     remaining = [c for c in pool if c not in order]
     current = _simulate(order, request) or {"stops": [], "totals": {"value": 0}}
     current_score = _objective(current, request) if order else 0.0
@@ -176,8 +190,6 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
         for candidate in remaining:
             for index in range(len(order) + 1):
                 trial = order[:index] + [candidate] + order[index:]
-                if any(trial.index(lock) > trial.index(nxt) for lock, nxt in zip(locked, locked[1:])):
-                    continue
                 simulation = _simulate(trial, request)
                 if simulation is None:
                     continue
@@ -215,6 +227,8 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "depart": stop["depart"].strftime("%H:%M"),
             "visit_min": stop["visit_min"],
             "wait_min": stop["wait_min"],
+            "free_min": stop.get("free_min", 0),
+            "timing_note": request.timing_notes.get(candidate.id),
             "open_check": stop["open_check"],
             "entry_fee": candidate.entry_fee,
             "entry_cost": candidate.entry_cost,

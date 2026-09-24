@@ -26,6 +26,8 @@ _MINUTES = re.compile(r"\b(?:in|within|under|less than|max(?:imum)?|up to)\s*(?P
 _HOURS = re.compile(r"\b(?P<v>\d+(?:\.\d+)?)\s*(?:hours|hrs|hour|hr|h)\b", re.IGNORECASE)
 _RATING = re.compile(r"\b(?:rated|rating|stars?)\s*(?:above|over|at least|>=?|of)?\s*(?P<v>[1-4](?:\.\d)?)\s*\+?|(?P<v2>[1-4]\.\d)\s*\+?\s*(?:stars?|rating|rated)", re.IGNORECASE)
 _LIMIT = re.compile(r"\b(?:only|just|give me|top|pick|show me)\s+(?P<n>\d{1,2}|one|two|three|four|five)\b(?:\s+(?:places?|options?|spots?|things?|ideas?))?|\b(?P<n2>\d{1,2}|one|two|three|four|five)\s+(?:places?|options?|spots?|ideas?)\s+only\b", re.IGNORECASE)
+_UNITS_AFTER = r"(?![\d,])(?!\s*(?:m\b|km|kms|min|mins|minute|minutes|hour|hours|hrs?\b|h\b|people|persons?|stars?|%|am\b|pm\b|:|\.\d|-|–))"
+_BARE_AMOUNT = re.compile(r"(?:^|,|;|\band\b|\bwith\b|\bfor\b)\s*(?P<amt>\d{3,6})" + _UNITS_AFTER + r"\s*(?=$|,|;|\.|\band\b)", re.IGNORECASE)
 _WORD_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 _ROUTE_FROM_TO = re.compile(r"\bfrom\s+(?P<o>.+?)\s+to\s+(?P<d>[^?.!,]+)", re.IGNORECASE)
 _ROUTE_ON_WAY = re.compile(r"\b(?:on (?:my|the) way|en route|along the way|on the route)\s+(?:to|towards)\s+(?P<d>[^?.!,]+)", re.IGNORECASE)
@@ -56,6 +58,10 @@ class Constraints:
     route_origin: str | None = None
     route_destination: str | None = None
     raining: bool = False
+    # Each thing the traveller asked for, with how many: [{"label", "categories", "tags", "quantity", "timing"}].
+    # "temples and a sunset spot and a park" → temples (any number), 1 sunset spot, 1 park.
+    wishes: list[dict[str, Any]] = field(default_factory=list)
+    include_tags: list[str] = field(default_factory=list)  # places carrying these tags also match (e.g. "sunset")
     understood: list[str] = field(default_factory=list)  # human-readable interpretation
 
     def as_dict(self) -> dict[str, Any]:
@@ -63,7 +69,7 @@ class Constraints:
 
     @property
     def is_empty(self) -> bool:
-        return not any([self.available_minutes, self.window_start, self.max_cost, self.max_price_level, self.min_rating, self.max_travel_min, self.travel_mode, self.open_now, self.crowd, self.limit, self.ranking_mode, self.include_categories, self.include_groups, self.exclude_categories, self.avoid_tags, self.route_destination])
+        return not any([self.available_minutes, self.window_start, self.max_cost, self.max_price_level, self.min_rating, self.max_travel_min, self.travel_mode, self.open_now, self.crowd, self.limit, self.ranking_mode, self.include_categories, self.include_groups, self.exclude_categories, self.avoid_tags, self.route_destination, self.wishes])
 
 
 def _has(norm: str, phrases: list[str]) -> str | None:
@@ -95,7 +101,9 @@ def _negated_spans(text: str, negations: list[str]) -> list[str]:
     spans = []
     pattern = r"\b(?:" + "|".join(re.escape(n) for n in sorted(negations, key=len, reverse=True)) + r")\b(?P<span>[^,.;!?]*)"
     for match in re.finditer(pattern, text, re.IGNORECASE):
-        span = re.split(r"\b(?:but|and i|and we|i want|i'd like|however)\b", match.group("span"), maxsplit=1, flags=re.IGNORECASE)[0]
+        # A negation covers "no museums or galleries" but stops at a new item ("… and a park"),
+        # an amount ("… and 500") or a change of mind ("but", "plus", "also").
+        span = re.split(r"\b(?:but|and i|and we|i want|i'd like|however|plus|also|then|instead)\b|\band\s+(?=(?:a|an|the|some|one|two|three|four|maybe|\d))|(?=\b\d)|(?=₹)", match.group("span"), maxsplit=1, flags=re.IGNORECASE)[0]
         spans.append(span)
     return spans
 
@@ -109,6 +117,68 @@ def _categories_in(norm: str) -> tuple[list[str], list[str]]:
         if _has(norm, [entry["label"], group_id]) and group_id not in {"stay", "services"}:
             groups.append(group_id)
     return cats, groups
+
+
+def _plural(label: str) -> str:
+    if label.endswith(("ch", "sh", "x", "z")):
+        return label + "es"
+    return label if label.endswith("s") else (label[:-1] + "ies" if label.endswith("y") and label[-2:-1] not in "aeiou" else label + "s")
+
+
+def wish_label(item: dict[str, Any]) -> str:
+    quantity, label = item.get("quantity"), item["label"].lower()
+    if quantity == 1:
+        return f"1 {label}"
+    if quantity:
+        return f"{quantity} {_plural(label)}"
+    return _plural(label)
+
+
+def _quantity(chunk: str, synonym: str | None, rules: dict[str, Any]) -> int | None:
+    """'a park' → 1, 'two temples' → 2, 'temples' / 'some temples' → None (as many as fit)."""
+    words = chunk.strip()
+    fillers = sorted(rules["wish_fillers"], key=len, reverse=True)
+    changed = True
+    while changed:
+        changed = False
+        for filler in fillers:
+            if words.startswith(filler + " "):
+                words, changed = words[len(filler) + 1:].lstrip(), True
+    for phrase, amount in sorted(rules["quantity_words"].items(), key=lambda item: -len(item[0])):
+        if words.startswith(phrase + " "):
+            if phrase == "the" and synonym and synonym.endswith("s"):
+                return None  # "the temples" is plural
+            return amount
+    digits = re.match(r"(\d)\s", words)
+    return int(digits.group(1)) if digits else None
+
+
+def _wish_items(text: str, rules: dict[str, Any], excluded: set[str]) -> list[dict[str, Any]]:
+    """Split the positive part of a request into the separate things asked for."""
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    chunks = re.split(r",|;|\band\b|\bplus\b|&|\bthen\b|\balso\b|\bwith\b|\bor\b", text)
+    categories = taxonomy()["categories"]
+    for chunk in chunks:
+        chunk_norm = normalize(chunk)
+        if not chunk_norm:
+            continue
+        spot = next(((key, entry, _has(chunk_norm, entry["phrases"])) for key, entry in rules["spots"].items() if _has(chunk_norm, entry["phrases"])), None)
+        if spot:
+            key, entry, phrase = spot
+            if f"spot:{key}" not in seen:
+                seen.add(f"spot:{key}")
+                items.append({"key": f"spot:{key}", "label": entry["label"], "categories": [c for c in entry["categories"] if c not in excluded], "tags": list(entry["tags"]), "tag_categories": [c for c in entry.get("tag_categories", []) if c not in excluded], "quantity": _quantity(chunk.lower().strip(), phrase, rules), "timing": entry.get("timing")})
+            continue
+        for category_id, entry in categories.items():
+            if category_id in excluded or entry.get("kind") in {"stay", "service"}:
+                continue
+            synonym = _has(chunk_norm, entry["synonyms"])
+            if synonym and category_id not in seen:
+                seen.add(category_id)
+                singular = synonym[:-1] if synonym.endswith("s") and synonym[:-1] in entry["synonyms"] else synonym
+                items.append({"key": category_id, "label": singular, "categories": [category_id], "tags": [], "quantity": _quantity(chunk.lower().strip(), synonym, rules), "timing": None})
+    return items
 
 
 def parse_constraints(text: str) -> Constraints:
@@ -136,6 +206,15 @@ def parse_constraints(text: str) -> Constraints:
     cats, groups = _categories_in(positive_norm)
     c.include_categories = [x for x in cats if x not in c.exclude_categories]
     c.include_groups = groups
+    positive_text = lowered
+    for span in _negated_spans(lowered, rules["negations"]):
+        positive_text = positive_text.replace(span, " ")
+    c.wishes = _wish_items(positive_text, rules, set(c.exclude_categories))
+    c.include_tags = sorted({tag for item in c.wishes for tag in item["tags"]})
+    for item in c.wishes:
+        for category in item["categories"]:
+            if category not in c.include_categories and category not in c.exclude_categories:
+                c.include_categories.append(category)
     for preference, phrases in taxonomy()["preferences"].items():
         if _has(positive_norm, phrases):
             c.preferences.append(preference)
@@ -152,6 +231,13 @@ def parse_constraints(text: str) -> Constraints:
         if amount:
             c.max_cost = str(Decimal(amount).quantize(Decimal("0.01")))
             c.cost_currency = _CURRENCY_WORDS.get(symbol, "INR")
+    if not money:
+        # An amount without a currency: after a budget word ("under 500") or on its own as a list item ("…, 500 and a park").
+        words = "|".join(re.escape(w) for w in sorted(rules["budget_words"], key=len, reverse=True))
+        bare = re.search(rf"\b(?:{words})\s*(?P<amt>\d[\d,]{{1,7}})" + _UNITS_AFTER, raw, re.IGNORECASE) or _BARE_AMOUNT.search(raw)
+        if bare:
+            c.max_cost = str(Decimal(bare.group("amt").replace(",", "")).quantize(Decimal("0.01")))
+            c.cost_currency = None  # not stated: read as the destination's currency
     symbols = re.search(r"(₹{1,4}|\${1,4})(?!\s*\d)", raw)
     if symbols:
         c.max_price_level = len(symbols.group(1))
@@ -243,6 +329,7 @@ def parse_constraints(text: str) -> Constraints:
         inner = parse_constraints(rest)
         c.include_categories, c.include_groups, c.exclude_categories = inner.include_categories, inner.include_groups, inner.exclude_categories
         c.preferences = inner.preferences
+        c.wishes, c.include_tags = inner.wishes, inner.include_tags
 
     c.understood = describe(c)
     return c
@@ -257,10 +344,12 @@ def describe(c: Constraints) -> list[str]:
     elif c.available_minutes:
         out.append(f"Time available: {c.available_minutes // 60} h {c.available_minutes % 60} min".replace(" 0 min", ""))
     if c.max_cost:
-        out.append(f"Spend up to {c.cost_currency or ''} {c.max_cost}".strip())
+        out.append(f"Spend up to {c.cost_currency} {c.max_cost}" if c.cost_currency else f"Spend up to {c.max_cost} (local currency)")
     if c.max_price_level:
         out.append("Price level ≤ " + "₹" * c.max_price_level)
-    if c.include_categories or c.include_groups:
+    if c.wishes:
+        out.append("Looking for: " + " · ".join(wish_label(item) for item in c.wishes))
+    elif c.include_categories or c.include_groups:
         grouped = {x for g in c.include_groups for x in taxonomy()["groups"].get(g, {}).get("categories", [])}
         out.append("Looking for: " + ", ".join([group_labels[g] for g in c.include_groups] + [labels[x] for x in c.include_categories if x in labels and x not in grouped]))
     if c.exclude_categories:

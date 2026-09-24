@@ -98,7 +98,13 @@ export const askGeoGuide = ({ question, context, selectedPlaceId, language, debu
   }),
 })
 
-export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedIds, previous, wishes, replan, profile }) => request('/api/plan', {
+// Swipe deck: the candidate places for the wishes. Right-swipes are sent back as lockedIds, left-swipes as excludedIds.
+export const getPlanDeck = ({ context, wishes, dayOffset, lockedIds, excludedIds, profile }) => request('/api/plan/deck', {
+  method: 'POST',
+  body: JSON.stringify({ user_location: context.userLocation || null, active_destination: destinationBody(context.destination), wishes: wishes || null, day_offset: dayOffset, locked_ids: lockedIds, excluded_ids: excludedIds, profile: profile || null }),
+})
+
+export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedIds, excludedIds, previous, wishes, replan, profile }) => request('/api/plan', {
   method: 'POST',
   body: JSON.stringify({
     user_location: context.userLocation || null,
@@ -108,6 +114,7 @@ export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedI
     day_offset: dayOffset,
     start,
     locked_ids: lockedIds,
+    excluded_ids: excludedIds || [],
     previous,
     wishes: wishes || null,
     replan: replan || null,
