@@ -51,7 +51,7 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
    * switch to *Popular*, *Local favourites* or *Hidden gems*, or to *Within my budget*;
    * open the **Hotels** tab for the best stays around you or the destination, sorted by best match, cheapest, nearest or top rated, with live nightly rates when web search is configured;
    * use the search box for any place, hotel or destination you've heard of. It tolerates typos (*vitala temple*).
-5. **Plan**: describe the day (*Temples and a sunset spot, no museums, under ₹800*, *Free from 4–8 PM, by bike*), pick a duration and transport, and add must-see places from search. The plan respects opening hours, travel time and the budget. Then re-optimise it from where you are: **Done**, **Staying +15/+30 min**, **Skip**, or **Running 20 min late**. Presets re-plan for cheaper, greener or less walking.
+5. **Plan**: tap **Swipe to pick places** for a card deck of candidates for your wishes, taking turns between them (a temple, then a sunset spot, then a park…). Swipe or drag right to go, left to skip; the ✕ / ♥ buttons, the arrow keys and undo do the same. Places you like are kept in the plan, and places you skip are left out. Describe the day (*Temples and a sunset spot, no museums, under ₹800*, *Free from 4–8 PM, by bike*), pick a duration and transport, and add must-see places from search. The plan respects opening hours, travel time and the budget. Then re-optimise it from where you are: **Done**, **Staying +15/+30 min**, **Skip**, or **Running 20 min late**. Presets re-plan for cheaper, greener or less walking.
 6. **Ask**: try these:
    * *What should I visit in Hampi tomorrow?* (discovery + forecast + advisories)
    * *Why is Hampi historically important?* (knowledge retrieval)
@@ -122,6 +122,7 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 
 * **Constraint engine** (`app/query/constraints.py`, vocabulary in `intents.json → constraints`) turns free text into structured filters: time window, time available, max cost and currency, price level, minimum rating, travel mode and max travel minutes, open now, crowd, party, "N places only", popular/local/hidden gems, include/exclude categories, avoided tags, and route endpoints. Hidden gems, local favourites and popular are defined by popularity scores and tags in `ranking.json → ranking_modes`, not by hand-picked lists.
 * **Confidence** (`app/ranking/confidence.py`) scores entity, location, hours, price and freshness separately. Conflicts between sources (location more than 1 km apart, open vs closed, different fees) cap the overall confidence.
+* **Wishes are items with quantities.** *"temples and the sunset spot, no museums, 500 and a park"* means: temples (as many as fit), **1** sunset spot, **1** park, no museums, and a budget of 500 in the local currency. A negation stops at the next item (*"no museums and a park"* still wants a park). The plan covers every item before adding more of one kind, caps singular items, picks within the budget together (entry fees plus estimated transport), and schedules a sunset spot about 45 minutes before the forecast sunset. A sunset spot is a viewpoint, or a scenic place tagged *sunset*, never a sunset-tagged bar or market. Each item comes back with a status (planned, none stored here, over budget with the price, or didn't fit with the reason), so an empty or partial plan explains itself. Nearby takes turns between the items the same way.
 * **Cost**: every place and hotel shows its entry fee or nightly rate against your daily budget. Nightly rates come only from a live source (SerpApi Google Hotels). The dataset has no rates, so none are invented.
 
 **Add a destination:** copy `data/packs/hampi` as a template, edit the JSON, then run `python -m app.db.seed --pack data/packs/<name>` (or restart with an empty database). Places without a pack still work: GeoGuide pulls OpenStreetMap POIs on demand and uses live maps search.
@@ -142,6 +143,7 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 | `GET /api/hotels` | Best stays; `sort=best\|cheapest\|nearest\|top_rated`, `check_in`, `nights`, `max_price`, `min_stars`, `within_budget` |
 | `GET /api/search` | `q`, `kind=place\|stay\|destination`: typo-tolerant search over stored places, hotels and destinations, then live maps |
 | `GET /api/places/{id}` | Place detail with facts, advisories, provenance, confidence, cost for you |
+| `POST /api/plan/deck` | Swipe cards for the wishes (same body as `/api/plan`): `cards` taking turns between wishes, each labelled with its wish, plus `wish_coverage` (nothing stored / over budget). Liked ids go back as `locked_ids`, skipped ones as `excluded_ids` |
 | `POST /api/plan` | Itinerary; `duration=2h\|4h\|full\|minutes`, `preset=balanced\|cheaper\|greener\|less_walking`, `wishes` (free text), `previous` for change explanations, `replan={previous, completed_ids, skipped_ids, current_stop_id, extra_minutes, now}` |
 | `GET /api/destinations`, `/destinations/resolve`, `/destinations/{id}/pack` | Destination search, resolution, and cached knowledge pack |
 | `GET /api/weather`, `/api/location/describe`, `/api/config`, `/api/health` | Supporting endpoints |
@@ -155,7 +157,7 @@ cd geoguide/backend && python -m pytest -q
 cd geoguide/frontend && npm run lint && npm run build
 ```
 
-The backend suite (129 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
+The backend suite (149 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
 
 * GPS available, missing, stale, low-accuracy or invalid, and "explicit destination vs GPS"
 * A labelled intent set, radius and category hard filters, and ranking precision@3
@@ -168,6 +170,7 @@ The backend suite (129 tests) runs offline against a fictional destination ("Tes
 * Dataset import against a mini database in the organisers' exact schema, the dataset weather fallback, and source conflicts
 * The constraint engine, hidden gems, budget fit, hotels with live rates, plan wishes, re-planning from the current state, route detours, compare and search
 * City + date: date ranges, city resolution, multi-day overlap, city scoping, cancelled and associated festivals, live listings (dated / undated / duplicate), weather basis per date, the three judge states (today, festival date, empty date), and an LLM that invents a festival being rejected
+* Plan wishes: negation scope, amounts without a currency, quantities, one-of caps, sunset timing, explained gaps, liked places not forced into swipe order, and the swipe deck
 * The full API
 
 ## Known limits

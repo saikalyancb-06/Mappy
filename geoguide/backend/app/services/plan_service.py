@@ -27,7 +27,8 @@ from app.planning.itinerary import PlanRequest, optimise
 from app.query.constraints import Constraints, _negated_spans, parse_constraints
 from app.search.aggregator import aggregate
 from app.services.cost import to_decimal
-from app.services.discovery import DiscoveryRequest, discover
+from app.query.constraints import wish_label
+from app.services.discovery import DiscoveryRequest, discover, interleave_by_wish, matches_wish
 from app.weather.open_meteo import get_weather, local_now
 
 _PART_START = {"morning": 7, "afternoon": 13, "evening": 16, "night": 18}
@@ -111,10 +112,17 @@ def build_plan(
     constraints: Constraints | None = None,
     replan: ReplanState | None = None,
     trace: Trace | None = None,
+    deck: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
+    """Build a plan. With ``deck=True``, return the candidate cards for swiping instead of a plan."""
     config = load_rules("itinerary")
     reference = geo.reference
     destination = destination_by_id(reference.destination_id)
+    if destination and reference.origin == "user_location" and reference.radius_km < (destination.coverage_radius_km or 0):
+        # A day plan covers the whole destination the traveller is in; it still starts from where they are.
+        from dataclasses import replace
+
+        reference = replace(reference, radius_km=float(destination.coverage_radius_km))
     weather = get_weather(reference.lat, reference.lon, day_offset)
     tz = (destination.timezone if destination else None) or (weather.get("timezone") if weather.get("status") == "ok" else None)
     now = local_now(tz)
@@ -219,6 +227,28 @@ def build_plan(
     for candidate in extra:
         candidate.score = candidate.score or 0.6
     candidates, _ = aggregate([result.candidates, extra])
+    candidates.sort(key=lambda c: -(c.score or 0))
+    items = (constraints.wishes if constraints else None) or []
+    place_name = destination.name if destination else (f"within {reference.radius_km:g} km of you" if reference.origin == "user_location" else reference.label)
+    if deck:
+        cards = interleave_by_wish(candidates, items) if len(items) > 1 else candidates
+        excluded = set(excluded_ids)
+        cards = [c for c in cards if c.id not in excluded]
+        for card in cards:
+            card.scores["wish"] = next((wish_label(item) for item in items if matches_wish(card, item)), None)
+        deck_result = {
+            "cards": [c.as_dict() for c in cards[:DECK_SIZE]],
+            "understood": understood,
+            "wish_coverage": _wish_coverage(candidates, items, budget_cap, currency, place_name, excluded),
+            "budget_cap": str(budget_cap) if budget_cap is not None else None,
+            "currency": currency,
+        }
+        return deck_result, weather, list(result.provider_errors)
+    user_locks = list(locked_ids)
+    all_candidates = list(candidates)
+    coverage: list[dict[str, Any]] = []
+    if items:
+        candidates, locked_ids, coverage = _fill_wishes(candidates, items, locked_ids, set(excluded_ids), budget_cap, currency, place_name)
     if previous and replan is not None:
         # Places that were already in the plan keep a small preference so the plan stays stable.
         kept = {s["poi_id"] for s in previous.get("stops") or []}
@@ -242,14 +272,18 @@ def build_plan(
         travel_mode=(constraints.travel_mode if constraints else None) or profile.get("travel_mode"),
         understood=understood,
     )
-    plan = optimise(request)
+    plan = _optimise_covering(request, coverage, items, all_candidates, weather, start_time, int(duration_min))
     plan["destination_id"] = reference.destination_id
     plan["weather_signals"] = weather.get("signals") or []
     plan["wishes"] = wishes
     plan["replanned"] = replan is not None
     if replan is not None:
         plan["completed"] = [s for s in replan.previous.get("stops") or [] if s["poi_id"] in (set(replan.completed_ids) | ({replan.current_stop_id} if replan.current_stop_id else set()))]
-    missing = [i for i in locked_ids if i not in {s["poi_id"] for s in plan["stops"]}]
+    planned = {s["poi_id"] for s in plan["stops"]}
+    plan["wish_coverage"] = coverage
+    plan["understood"] = [*plan.get("understood", []), *[entry["timing_note"] for entry in coverage if entry.get("timing_note")]]
+    plan["warnings"] = [*plan["warnings"], *[entry["note"] for entry in coverage if entry["status"] != "planned" and entry.get("note")]]
+    missing = [i for i in user_locks if i not in planned]
     if missing:
         plan["warnings"] = [*plan["warnings"], *[f"Couldn't fit {c.name} in this window (time, opening hours or budget)." for c in get_pois(missing)]]
     if trace:
@@ -257,6 +291,202 @@ def build_plan(
     _persist(plan, user_id, reference.destination_id, start_time)
     plan["_candidates"] = candidates
     return plan, weather, list(result.provider_errors)
+
+
+DECK_SIZE = 24
+
+
+def _money(amount: Decimal | None, currency: str | None) -> str:
+    from app.services.cost import money_text
+
+    return money_text(amount, currency) or "?"
+
+
+def _wish_coverage(candidates: list[Any], items: list[dict[str, Any]], budget_cap: Decimal | None, currency: str | None, place: str, excluded: set[str]) -> list[dict[str, Any]]:
+    """For each thing asked for: is there anything stored for it, and anything within budget?"""
+    out = []
+    for item in items:
+        label = wish_label(item)
+        matches = [c for c in candidates if matches_wish(c, item) and c.id not in excluded]
+        entry = {"key": item["key"], "label": item["label"], "wish": label, "quantity": item.get("quantity"), "status": "available", "note": None, "picks": [], "pick_names": [], "matches": len(matches)}
+        if not matches:
+            entry["status"], entry["note"] = "none_available", f"No verified {_plural_label(item)} found {place if place.startswith('within') else 'in ' + place}, so the plan can't include one."
+        elif budget_cap is not None:
+            affordable = [c for c in matches if (to_decimal(c.entry_cost) or Decimal(0)) <= budget_cap]
+            if not affordable:
+                cheapest = min(matches, key=lambda c: to_decimal(c.entry_cost) or Decimal(0))
+                entry["status"] = "over_budget"
+                entry["note"] = (f"The only {item['label']} ({cheapest.name}) costs {_money(to_decimal(cheapest.entry_cost), cheapest.fee_currency or currency)}" if len(matches) == 1 else f"The cheapest {item['label']} ({cheapest.name}) costs {_money(to_decimal(cheapest.entry_cost), cheapest.fee_currency or currency)}") + f", over your {_money(budget_cap, currency)} budget."
+        out.append(entry)
+    return out
+
+
+def _plural_label(item: dict[str, Any]) -> str:
+    from app.query.constraints import _plural
+
+    return _plural(item["label"].lower())
+
+
+def _mark_coverage(plan: dict[str, Any], coverage: list[dict[str, Any]], items: list[dict[str, Any]], by_id: dict[str, Any]) -> int:
+    """Set each wish's status from the plan; returns how many wishes the plan covers."""
+    planned = {s["poi_id"] for s in plan["stops"]}
+    covered = 0
+    for item, entry in zip(items, coverage):
+        if entry["status"] in {"none_available", "over_budget"}:
+            continue
+        if entry.get("open_ended"):
+            hits = [s["name"] for s in plan["stops"] if s["poi_id"] in by_id and matches_wish(by_id[s["poi_id"]], item)]
+            entry["status"], entry["pick_names"] = ("planned", hits) if hits else ("didnt_fit", [])
+        else:
+            hits = [pid for pid in entry["picks"] if pid in planned]
+            entry["status"] = "planned" if hits else "didnt_fit"
+        covered += entry["status"] == "planned"
+    return covered
+
+
+def _optimise_covering(request: PlanRequest, coverage: list[dict[str, Any]], items: list[dict[str, Any]], candidates: list[Any], weather: dict[str, Any], start_time: datetime, duration_min: int) -> dict[str, Any]:
+    """Optimise, then swap in alternatives for one-of wishes that didn't fit (up to 3 rounds), and
+    explain what still doesn't fit: the budget (entry + transport) or the time window/opening hours."""
+    by_id = {c.id: c for c in candidates}
+    capped = [item for item in items if item.get("quantity")]
+    open_ended = [item for item in items if not item.get("quantity")]
+    # Places that only match one-of wishes enter the pool only as that wish's current pick.
+    base_pool = [c for c in candidates if not any(matches_wish(c, i) for i in capped) or any(matches_wish(c, i) for i in open_ended) or c.id in request.locked_ids and not any(c.id in e.get("picks", []) for e in coverage)]
+    base_locks = [pid for pid in request.locked_ids if not any(pid in entry.get("picks", []) for entry in coverage)]
+
+    def setup() -> None:
+        early = [pid for e in coverage if e.get("timing") == "early" for pid in e.get("picks", [])]
+        late = [pid for e in coverage if e.get("timing") == "late" for pid in e.get("picks", [])]
+        middle = [pid for e in coverage if e.get("timing") not in {"early", "late"} for pid in e.get("picks", [])]
+        request.locked_ids = list(dict.fromkeys([*early, *base_locks, *middle, *late]))
+        picks = {pid for e in coverage for pid in e.get("picks", [])}
+        request.candidates = [*base_pool, *[by_id[pid] for pid in picks if pid in by_id and by_id[pid] not in base_pool]]
+        request.not_before, request.timing_notes = _sunset_timing(coverage, weather, start_time, duration_min)
+
+    def attempt() -> dict[str, Any]:
+        setup()
+        timed = optimise(request)
+        placed = {s["poi_id"] for s in timed["stops"]}
+        if not request.not_before or all(pid in placed for pid in request.not_before):
+            return timed
+        # A sunset spot that closes before sunset: try visiting it earlier, keep whichever plan covers more.
+        timed_covered = _mark_coverage(timed, [dict(e) for e in coverage], items, by_id)
+        for pid in [pid for pid in request.not_before if pid not in placed]:
+            request.not_before.pop(pid)
+            request.timing_notes[pid] = "couldn't be timed for sunset alongside the rest of the plan, so visited earlier"
+        untimed = optimise(request)
+        untimed_covered = _mark_coverage(untimed, [dict(e) for e in coverage], items, by_id)
+        return untimed if (untimed_covered, len(untimed["stops"])) > (timed_covered, len(timed["stops"])) else timed
+
+    plan = attempt()
+    best, best_covered = plan, _mark_coverage(plan, coverage, items, by_id)
+    saved = [dict(e) for e in coverage]
+    for _ in range(3):
+        stuck = [e for e in coverage if e["status"] == "didnt_fit" and e.get("alternatives")]
+        if not stuck:
+            break
+        for entry in stuck:
+            entry["picks"] = [entry["alternatives"].pop(0)]
+            entry["pick_names"] = [by_id[entry["picks"][0]].name] if entry["picks"][0] in by_id else []
+        plan = attempt()
+        covered = _mark_coverage(plan, coverage, items, by_id)
+        if covered > best_covered:
+            best, best_covered, saved = plan, covered, [dict(e) for e in coverage]
+    for entry, kept in zip(coverage, saved):
+        entry.clear()
+        entry.update(kept)
+    setup()  # the request as it was for the kept plan, for explaining what didn't fit
+    for entry in coverage:
+        if entry["status"] != "didnt_fit":
+            continue
+        names = ", ".join(entry.get("pick_names") or []) or "any of them"
+        reason = "in this time window and opening hours"
+        if request.budget_cap is not None and entry.get("picks"):
+            relaxed = PlanRequest(**{**request.__dict__, "budget_cap": None, "previous": None})
+            if any(s["poi_id"] in entry["picks"] for s in optimise(relaxed)["stops"]):
+                reason = f"within the {_money(request.budget_cap, request.currency)} budget (entry fees plus estimated transport)"
+        entry["note"] = f"Couldn't fit a {entry['label']} ({names}) {reason}." if not entry.get("open_ended") else f"Couldn't fit any {_plural_label({'label': entry['label']})} {reason}."
+    return best
+
+
+def _sunset_timing(coverage: list[dict[str, Any]], weather: dict[str, Any], start_time: datetime, duration_min: int) -> tuple[dict[str, datetime], dict[str, str]]:
+    """Reach "late" wishes (sunset spots) shortly before the forecast sunset, when it falls in the window."""
+    sunset_text = ((weather or {}).get("day") or {}).get("sunset") if (weather or {}).get("status") == "ok" else None
+    if not sunset_text:
+        return {}, {}
+    try:
+        sunset = datetime.fromisoformat(sunset_text).replace(tzinfo=start_time.tzinfo)
+    except ValueError:
+        return {}, {}
+    arrive = sunset - timedelta(minutes=load_rules("itinerary").get("sunset_lead_min", 45))
+    end = start_time + timedelta(minutes=duration_min)
+    late = [entry for entry in coverage if entry.get("timing") == "late" and entry.get("picks")]
+    if not late or arrive < start_time:
+        return {}, {}
+    if arrive + timedelta(minutes=30) > end:
+        for entry in late:
+            entry["timing_note"] = f"Sunset is at {sunset.strftime('%H:%M')}, after this plan ends at {end.strftime('%H:%M')}; the sunset spot is placed last. Extend the day to catch it."
+        return {}, {}
+    not_before, notes = {}, {}
+    for entry in coverage:
+        if entry.get("timing") == "late":
+            for pid in entry["picks"]:
+                not_before[pid] = arrive
+                notes[pid] = f"timed for sunset ({sunset.strftime('%H:%M')})"
+    return not_before, notes
+
+
+def _fill_wishes(candidates: list[Any], items: list[dict[str, Any]], locked_ids: list[str], excluded: set[str], budget_cap: Decimal | None, currency: str | None, place: str) -> tuple[list[Any], list[str], list[dict[str, Any]]]:
+    """Cover every wish: lock its best affordable match(es), cap singular wishes ("a park" → one park),
+    and schedule sunset spots last and sunrise spots first. Returns (pool, locks in order, coverage)."""
+    coverage = _wish_coverage(candidates, items, budget_cap, currency, place, excluded)
+    taken: set[str] = set(locked_ids)
+    spent = Decimal(0)  # entry fees of the picks so far; together they must stay within the budget
+    early, middle, late = [], [], []
+
+    def cheapest(item: dict[str, Any]) -> Decimal:
+        costs = [to_decimal(c.entry_cost) or Decimal(0) for c in candidates if matches_wish(c, item) and c.id not in excluded]
+        return min(costs) if costs else Decimal(0)
+
+    for index, (item, entry) in enumerate(zip(items, coverage)):
+        if entry["status"] != "available":
+            continue
+        # Leave room for the cheapest option of each later one-of wish.
+        reserve = sum((cheapest(later) for later, later_entry in zip(items[index + 1:], coverage[index + 1:]) if later.get("quantity") and later_entry["status"] == "available"), Decimal(0))
+        affordable = [c for c in candidates if matches_wish(c, item) and c.id not in excluded and (budget_cap is None or (to_decimal(c.entry_cost) or Decimal(0)) <= budget_cap)]
+        affordable.sort(key=lambda c: (c.category not in item["categories"], -(c.score or 0)))  # the named kind of place first
+        already = [c for c in affordable if c.id in locked_ids]
+        if not item.get("quantity"):
+            # Open-ended ("temples"): the optimiser picks as many nearby ones as fit; nothing is locked.
+            entry.update({"status": "picked", "picks": [], "pick_names": [], "open_ended": True, "timing": item.get("timing")})
+            continue
+        wanted = max(0, item["quantity"] - len(already))
+        picks = []
+        for candidate in affordable:
+            if len(picks) >= wanted:
+                break
+            cost = to_decimal(candidate.entry_cost) or Decimal(0)
+            if candidate.id in taken or (budget_cap is not None and spent + cost + reserve > budget_cap):
+                continue
+            picks.append(candidate)
+            spent += cost
+            taken.add(candidate.id)
+        if not picks and not already and budget_cap is not None:
+            entry["status"], entry["note"] = "over_budget", f"Your other picks use the budget, so no {item['label']} fits within {_money(budget_cap, currency)}."
+            continue
+        chosen = already[: item.get("quantity") or 1] + picks
+        entry.update({"status": "picked", "picks": [c.id for c in chosen], "pick_names": [c.name for c in chosen], "timing": item.get("timing"), "alternatives": [c.id for c in affordable if c.id not in taken][:6]})
+        bucket = late if item.get("timing") == "late" else early if item.get("timing") == "early" else middle
+        bucket.extend(c.id for c in picks)
+    capped = [item for item in items if item.get("quantity")]
+    open_ended = [item for item in items if not item.get("quantity")]
+    kept_ids = taken
+    pool = [
+        c for c in candidates
+        if c.id in kept_ids or any(matches_wish(c, item) for item in open_ended) or not any(matches_wish(c, item) for item in capped)
+    ]
+    locks = list(dict.fromkeys([*early, *locked_ids, *middle, *late]))
+    return pool, locks, coverage
 
 
 def _persist(plan: dict[str, Any], user_id: str | None, destination_id: str | None, start_time: datetime) -> None:

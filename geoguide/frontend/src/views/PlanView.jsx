@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { CheckCircle2, Clock3, Footprints, Leaf, Lock, PiggyBank, Sparkles } from 'lucide-react'
-import { buildPlan } from '../api'
+import { CheckCircle2, Clock3, Footprints, Layers, Leaf, Lock, PiggyBank, Sparkles, Sunset } from 'lucide-react'
+import { buildPlan, getPlanDeck } from '../api'
 import SearchBox from '../components/SearchBox'
+import SwipeDeck from '../components/SwipeDeck'
 import { Chip, Notices, SectionTitle, StateMessage, Understood } from '../components/ui'
 import { formatDistance, formatMinutes, formatMoney, titleCase } from '../format'
 
@@ -25,12 +26,40 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notices, setNotices] = useState([])
+  const [deck, setDeck] = useState(null) // { cards, understood, wish_coverage }
+  const [decisions, setDecisions] = useState({}) // id → 'like' | 'pass'
+  const [history, setHistory] = useState([]) // decided ids, newest last, for undo
+  const [deckBusy, setDeckBusy] = useState(false)
+  const liked = Object.keys(decisions).filter((id) => decisions[id] === 'like')
+  const passed = Object.keys(decisions).filter((id) => decisions[id] === 'pass')
+
+  const resetDeck = () => { setDeck(null); setDecisions({}); setHistory([]) }
+  const openDeck = async () => {
+    setDeckBusy(true)
+    setError('')
+    try {
+      const result = await getPlanDeck({ context, wishes: wishes.trim(), dayOffset, lockedIds: savedIds, excludedIds: passed, profile: travelMode ? { travel_mode: travelMode } : null })
+      setDeck(result)
+      setNotices((result.provider_errors || []).filter((item) => item.code !== 'web_search_unavailable').map((item) => `${item.source}: ${item.message}`))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setDeckBusy(false)
+    }
+  }
+  const decide = (card, verdict) => { setDecisions((current) => ({ ...current, [card.id]: verdict })); setHistory((current) => [...current, card.id]) }
+  const undo = () => {
+    const last = history[history.length - 1]
+    if (!last) return
+    setHistory((current) => current.slice(0, -1))
+    setDecisions((current) => { const next = { ...current }; delete next[last]; return next })
+  }
 
   const run = async ({ preset = 'balanced', previous = null, replan = null } = {}) => {
     setBusy(true)
     setError('')
     try {
-      const result = await buildPlan({ context, duration, preset, dayOffset, start: dayOffset ? '08:00' : null, lockedIds: savedIds, previous, wishes: wishes.trim(), replan, profile: travelMode ? { travel_mode: travelMode } : null })
+      const result = await buildPlan({ context, duration, preset, dayOffset, start: dayOffset ? '08:00' : null, lockedIds: [...new Set([...savedIds, ...liked])], excludedIds: passed, previous, wishes: wishes.trim(), replan, profile: travelMode ? { travel_mode: travelMode } : null })
       setPlan(result.plan)
       if (!replan) setDone([])
       setWeather(result.weather)
@@ -54,19 +83,28 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
   return <div className="view-content">
     <header className="simple-header"><div><span className="eyebrow">Shape the day{context.destination ? ` · ${context.destination.name}` : ''}</span><h1>Your plan</h1></div><span className="status-pill">{plan ? (plan.replanned ? 'Re-optimised' : titleCase(plan.preset)) : 'Draft'}</span></header>
     <label className="wishes-box"><span className="eyebrow">What would you like to do?</span>
-      <textarea value={wishes} onChange={(event) => setWishes(event.target.value)} rows={3} placeholder="Tell GeoGuide in your words — places you want, things to avoid, budget, time…" />
+      <textarea value={wishes} onChange={(event) => { setWishes(event.target.value); resetDeck() }} rows={3} placeholder="Tell GeoGuide in your words — places you want, things to avoid, budget, time…" />
     </label>
-    <div className="chip-row">{EXAMPLES.map((text) => <Chip key={text} onClick={() => setWishes(text)}>{text}</Chip>)}</div>
+    <div className="chip-row">{EXAMPLES.map((text) => <Chip key={text} onClick={() => { setWishes(text); resetDeck() }}>{text}</Chip>)}</div>
     <div className="chip-row">{durations.map((key) => <Chip key={key} active={duration === key} onClick={() => setDuration(key)}>{DURATION_LABELS[key] || key}</Chip>)}</div>
     <div className="chip-row"><Chip active={dayOffset === 0} onClick={() => setDayOffset(0)}>Starting now</Chip><Chip active={dayOffset === 1} onClick={() => setDayOffset(1)}>Tomorrow 8:00</Chip></div>
     <div className="chip-row">{(config?.travel_modes || []).map((mode) => <Chip key={mode.id} active={travelMode === mode.id} onClick={() => setTravelMode((current) => current === mode.id ? null : mode.id)}>{mode.label}</Chip>)}</div>
     <SearchBox context={context} kind="place" placeholder="Add a must-see place…" onPlace={(place) => { if (!savedIds.includes(place.id)) onToggleSaved(place) }} />
     {savedIds.length > 0 && <p className="muted-text"><Lock size={13} /> {savedIds.length} saved place{savedIds.length > 1 ? 's are' : ' is'} kept in the plan when they fit.</p>}
     {profile?.max_daily_budget && <p className="muted-text">Daily budget: {formatMoney(profile.max_daily_budget, profile.budget_currency)} — plans stay within it unless you name another amount.</p>}
-    <button className="primary-button full-width" onClick={() => run()} disabled={busy} type="button"><Sparkles size={17} /> {busy ? 'Planning…' : plan ? 'Rebuild plan' : 'Build my plan'}</button>
+    {!deck && <button className="secondary-button full-width" onClick={openDeck} disabled={deckBusy} type="button"><Layers size={17} /> {deckBusy ? 'Finding places…' : 'Swipe to pick places'}</button>}
+    {deck && <>
+      <Understood items={deck.understood} />
+      {deck.wish_coverage?.some((w) => w.status !== 'available') && <Notices items={deck.wish_coverage.filter((w) => w.status !== 'available').map((w) => w.note)} />}
+      {deck.cards.length ? <SwipeDeck cards={deck.cards} decisions={decisions} onDecide={decide} onUndo={undo} onOpen={onOpen} /> : <StateMessage title="No places match" body="Nothing stored matches these wishes here. Try other wishes." />}
+      <button type="button" className="link-button" onClick={resetDeck}>Close the cards</button>
+    </>}
+    <button className="primary-button full-width" onClick={() => run()} disabled={busy} type="button"><Sparkles size={17} /> {busy ? 'Planning…' : deck && liked.length ? `Build plan with my ${liked.length} pick${liked.length > 1 ? 's' : ''}` : plan ? 'Rebuild plan' : 'Build my plan'}</button>
+    {(liked.length > 0 || passed.length > 0) && <p className="muted-text">{liked.length} to visit (kept in the plan when they fit) · {passed.length} skipped (left out)</p>}
     {error && <StateMessage title="Could not build a plan" body={error} />}
     {plan && <>
       <Understood items={plan.understood} />
+      {plan.wish_coverage?.length > 0 && <div className="coverage-row">{plan.wish_coverage.map((item) => <span key={item.key} className={`coverage-chip ${item.status === 'planned' ? 'ok' : 'miss'}`} title={item.note || ''}>{item.status === 'planned' ? '✓' : '✗'} {item.wish}</span>)}</div>}
       {plan.explanation?.length > 0 && <div className="briefing-card">{plan.explanation.map((line) => <p key={line}>{line}</p>)}</div>}
       {plan.completed?.length > 0 && <p className="muted-text"><CheckCircle2 size={13} /> Done: {plan.completed.map((s) => s.name).join(', ')}</p>}
       {plan.stops.length === 0 ? <StateMessage title="Nothing fits this window" body="Try a longer time window, a bigger budget or fewer exclusions." /> : <div className="timeline-card">
@@ -76,6 +114,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
             <span className="eyebrow">{stop.arrive}–{stop.depart}{stop.locked ? ' · must-see' : ''}{stop.confidence ? ` · ${stop.confidence} confidence` : ''}</span>
             <h3><button type="button" className="link-button" onClick={() => onOpen({ id: stop.poi_id, name: stop.name, category: stop.category, lat: stop.lat, lon: stop.lon, reasons: stop.reasons, sources: [] })}>{stop.name}</button></h3>
             <p>{MODE[stop.leg.mode] || stop.leg.mode} {formatMinutes(stop.leg.minutes)} · {formatDistance(stop.leg.distance_km)} from {stop.leg.from}{stop.leg.cost ? ` · ~${formatMoney(String(stop.leg.cost), stop.fee_currency)}` : ''}</p>
+            {stop.timing_note && <p className="timing-note"><Sunset size={13} /> {stop.timing_note.charAt(0).toUpperCase() + stop.timing_note.slice(1)}{stop.free_min ? ` · ${formatMinutes(stop.free_min)} free before this` : ''}</p>}
             <p>Visit {formatMinutes(stop.visit_min)}{stop.entry_cost != null ? ` · entry ${formatMoney(stop.entry_cost, stop.fee_currency)}` : ' · entry not verified'}{stop.open_check === 'hours_unknown' ? ' · hours not verified' : ''}{stop.wait_min ? ` · waits ${stop.wait_min} min for opening` : ''}</p>
             {stop.conflicts?.length > 0 && <p className="conflict-note">Sources disagree about this stop — verify before going.</p>}
             {index === 0 && <div className="stop-actions">
