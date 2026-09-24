@@ -744,6 +744,8 @@
     ]
   },
   "aggregation": {
+    "review_weight": 0.3,
+    "review_cap": 20,
     "place_half_life_days": 365,
     "prior_strength": 5,
     "derived_weight": 0.5,

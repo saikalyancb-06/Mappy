@@ -31,6 +31,7 @@ SERPAPI_KEY=...
 TICKETMASTER_API_KEY=...        # optional: structured listings in Ticketmaster markets (skipped for India)
 AUTH_SECRET=<any long random string>
 EVENT_MODERATOR_EMAILS=you@example.com   # optional: accounts that review organiser event submissions
+CITY_ENRICHMENT_ENABLED=true             # build a city's guide in the background when it is selected
 ```
 
 On first start the backend creates the database, imports every pack in `backend/data/packs/` (Hampi), imports the organisers' PS-13 dataset (60 cities, see below), and downloads the embedding model in the background (about 120 MB, once). Until the model is ready, knowledge search uses keyword (BM25) matching and says so in its responses. Check `http://localhost:8000/api/health` to see which services are configured.
@@ -87,6 +88,15 @@ pick ┘   (coverage → geocoder) ├─ events & festivals: city_id = ? AND st
 * **Source order:** curated and organiser data → live event APIs (Ticketmaster, optional, where it has coverage) → web event listings (Google Events via SerpApi). Listings are kept only if their dates can be read and overlap the requested day or range. They are stored with their source and a *verified* timestamp. The LLM is never a source of events.
 * **Zero stays zero.** If nothing matches, the response is `events: []` with `event_status: "no_verified_events_found"`. The model receives `VERIFIED EVENTS: None` plus a hard rule not to infer or substitute. The validator rejects any event or festival name that isn't in the evidence, and the answer falls back to a deterministic one built from the evidence.
 * **Follow-ups keep the context.** Ask sends the selected date. "What's happening here this weekend?" resolves *here* from GPS and *this weekend* against the selected date.
+
+## City intelligence
+
+Selecting a city is the moment GeoGuide builds its knowledge of that city. See **[docs/city-intelligence.md](docs/city-intelligence.md)** for the architecture audit, the design and API examples.
+
+* **Registry.** Every chosen city gets one canonical record in `destinations`: deterministic id, aliases, enrichment status (`NOT_STARTED` … `READY`, `PARTIAL`, `STALE`) and per-component freshness.
+* **Enrichment in the background.** Category searches (attractions, landmarks, museums, parks, viewpoints and so on) run through SerpApi's Google Maps results behind a `PlaceSearchProvider` interface. Results are normalised, checked against the city's boundary, de-duplicated and upserted idempotently. City knowledge (overview, history, culture, geography and so on) comes from Wikipedia with attribution. Provider reviews add vibe evidence at a lower weight than GeoGuide feedback.
+* **Database first.** Once prepared, questions about places and the city are answered from the database. Live Maps search runs only when the city isn't ready, coverage is thin or a place is unknown, and reusable finds are stored. Events, weather and "open now" stay live.
+* **Neutral recommendation policy.** One deterministic gate keeps permanently closed places out of suggestions. Deployments can list categories to exclude, and travellers can leave places of worship of every faith out of suggestions.
 
 ## Feedback, vibes and events
 

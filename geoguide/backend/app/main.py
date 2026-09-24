@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ask, auth, context, destinations, feedback, places, plan, system, submissions
+from app.api.routes import ask, auth, cities, context, destinations, feedback, places, plan, system, submissions
 from app.config import APP_ENV, APP_HOST, APP_PORT, AUTO_IMPORT_PS13, AUTO_SEED_FEEDBACK, AUTO_SEED_PACKS, CORS_ORIGINS
 from app.feedback.bootstrap import seed_feedback_if_needed
 from app.feedback.vocabulary import sync_vocabulary
@@ -34,7 +34,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="GeoGuide API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=CORS_ORIGINS != ["*"], allow_methods=["*"], allow_headers=["*"])
-for module in (system, auth, places, ask, plan, destinations, context, feedback, submissions):
+for module in (system, auth, places, ask, plan, destinations, cities, context, feedback, submissions):
     app.include_router(module.router)
 
 

@@ -14,6 +14,7 @@ from typing import Any
 from app.core.logging import Trace
 from app.core.rules import load_rules, taxonomy
 from app.geo import opening_hours
+from app.cities.router import route_question
 from app.geo.geo_context import GeoContext, build_geo_context, destination_by_id, distance_from_user
 from app.geo.geocoding import destination_to_place, resolve_place
 from app.geo.spatial import get_pois
@@ -128,6 +129,7 @@ class QueryService:
             IntentType.COMPARE: self._compare,
         }.get(intent.intent, self._knowledge)
         trace.set("route", handler.__name__.strip("_"))
+        trace.set("route_class", route_question(intent.intent.name, live_required=bool(intent.live_required), events_required=bool(intent.events_required)))
         handler(state)
         return self._respond(state)
 

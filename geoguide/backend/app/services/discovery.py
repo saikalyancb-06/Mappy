@@ -10,12 +10,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from app.cities.router import route_places
 from app.core.logging import Trace
 from app.core.rules import group_categories, load_rules, taxonomy
 from app.geo.geo_context import ActiveReference
 from app.geo.spatial import SpatialQuery, nearby
 from app.ingestion.overpass import fetch_and_store
 from app.models import Candidate
+from app.places.live import persist_live_results
 from app.ranking.ranker import RankRequest, rank
 from app.retrieval.knowledge import retrieve
 from app.search.aggregator import aggregate
@@ -176,20 +178,29 @@ def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApi
 
     web_candidates: list[Candidate] = []
     web_used = False
-    if request.allow_web and len(internal) < config["min_results_before_web"]:
-        if web.configured:
-            web_used = True
-            zoom = 15 if reference.radius_km <= 2 else 13 if reference.radius_km <= 8 else 12
-            try:
-                response = web.search(_web_query(request), engine="google_maps", lat=reference.lat, lon=reference.lon, zoom=zoom, limit=20)
-                web_candidates = [c for c in (candidate_from_web(r, response.retrieved_at, reference=(reference.lat, reference.lon), category_hint=request.category) for r in response.results) if c]
-                counts["web"] = len(web_candidates)
-                if trace:
-                    trace.step("web_places", query=response.query, results=len(response.results), candidates=len(web_candidates), cached=response.cached)
-            except SearchProviderError as exc:
-                errors.append(exc.as_dict())
-        else:
-            errors.append({"source": "serpapi", "code": "web_search_unavailable", "message": "Web search is not configured; showing stored places only."})
+    # Database first: the router decides whether stored places answer this or a live look-up is needed.
+    decision = route_places(destination_id=reference.destination_id, stored_count=len(internal), category_requested=bool(categories),
+                            time_sensitive=request.require_open or request.time_sensitive, live_available=web.configured, legacy_minimum=config["min_results_before_web"])
+    if trace:
+        trace.step("route", **decision.as_dict())
+    if request.allow_web and decision.allow_live:
+        web_used = True
+        zoom = 15 if reference.radius_km <= 2 else 13 if reference.radius_km <= 8 else 12
+        try:
+            response = web.search(_web_query(request), engine="google_maps", lat=reference.lat, lon=reference.lon, zoom=zoom, limit=20)
+            web_candidates = [c for c in (candidate_from_web(r, response.retrieved_at, reference=(reference.lat, reference.lon), category_hint=request.category) for r in response.results) if c]
+            counts["web"] = len(web_candidates)
+            persisted = persist_live_results(reference.destination_id, response.results) if decision.persist_live else None
+            if persisted and persisted.poi_ids:
+                internal = nearby(spatial_query)  # stored rows (stable ids) now answer; live duplicates merge into them
+                counts["database"] = len(internal)
+                counts["persisted"] = len(set(persisted.poi_ids))
+            if trace:
+                trace.step("web_places", query=response.query, results=len(response.results), candidates=len(web_candidates), cached=response.cached, persisted=persisted.as_dict() if persisted else None)
+        except SearchProviderError as exc:
+            errors.append(exc.as_dict())
+    elif request.allow_web and len(internal) < config["min_results_before_web"] and not web.configured:
+        errors.append({"source": "serpapi", "code": "web_search_unavailable", "message": "Web search is not configured; showing stored places only."})
 
     merged, duplicates = aggregate([internal, web_candidates])
     if wished is not None:

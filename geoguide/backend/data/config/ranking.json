@@ -109,6 +109,7 @@
     "default": [
       "curated",
       "database",
+      "google_maps",
       "serpapi_hotels",
       "serpapi_maps",
       "dataset",
@@ -117,6 +118,7 @@
     "coordinates": [
       "curated",
       "database",
+      "google_maps",
       "osm",
       "serpapi_maps",
       "serpapi_hotels",
@@ -124,6 +126,7 @@
     ],
     "rating": [
       "serpapi_hotels",
+      "google_maps",
       "serpapi_maps",
       "curated",
       "database",

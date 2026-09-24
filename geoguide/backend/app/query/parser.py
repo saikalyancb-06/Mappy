@@ -65,6 +65,7 @@ def _vocabulary_words() -> set[str]:
     words.update({"minute", "minutes", "min", "mins", "hour", "hours", "hr", "hrs", "km", "kms", "m", "metres", "meters", "rs", "rupees", "inr", "pm", "am", "only", "places", "options"})
     words.update({"night", "morning", "evening", "afternoon", "week", "weekend", "day", "days", "hour", "hours", "moment"})
     words.update({"place", "places", "thing", "things", "spot", "spots", "area", "areas", "somewhere", "something", "anything", "one", "ones", "some", "what", "where", "which", "i", "we", "you", "can", "should", "do", "go", "see", "get"})
+    words.update({"city", "town", "destination", "like", "region"})  # "this city" / "the town" mean the current destination, not a named place
     return words
 
 
@@ -194,10 +195,14 @@ def _entity(text: str) -> tuple[str | None, bool]:
             continue
         if _is_pronoun(mention):
             return None, True
-        if _is_self_reference(mention) or not _is_meaningful_mention(mention):
+        if _is_self_reference(mention) or not _is_meaningful_mention(mention) or _CURRENT_CITY.search(normalize(mention)):
             continue
         return mention, False
     return None, False
+
+
+# "the history of this city", "food in the city", "this town": about the current destination, not a named place.
+_CURRENT_CITY = re.compile(r"(?:^|\s)(?:this|the|our|my) (?:city|town|place|area|destination|region)$|^(?:this|the) (?:city|town)\b")
 
 
 def _is_date_phrase(phrase: str) -> bool:

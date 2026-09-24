@@ -60,6 +60,9 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
     <div className="chip-row wrap">{(config?.travel_modes || []).map((item) => <Chip key={item.id} active={draft.travel_mode === item.id} onClick={() => setDraft((current) => ({ ...current, travel_mode: current.travel_mode === item.id ? null : item.id }))}>{item.label}</Chip>)}</div>
     <SectionTitle eyebrow="Accessibility">Access needs</SectionTitle>
     <div className="chip-row wrap">{(config?.accessibility || []).map((item) => <Chip key={item.id} active={draft.accessibility?.includes(item.id)} onClick={() => toggleAccess(item.id)}>{item.label}</Chip>)}</div>
+    <SectionTitle eyebrow="Suggestions">What to leave out</SectionTitle>
+    <div className="chip-row wrap"><Chip active={Boolean(draft.exclude_places_of_worship)} onClick={() => setDraft((current) => ({ ...current, exclude_places_of_worship: !current.exclude_places_of_worship }))}>{draft.exclude_places_of_worship && <Check size={14} />}Leave places of worship out of suggestions</Chip></div>
+    <p className="muted-text">Applies to all faiths alike. You can still ask about any place by name.</p>
     <SectionTitle eyebrow="Language">Answers and briefings in</SectionTitle>
     <div className="chip-row wrap">{(config?.languages || []).map((item) => <Chip key={item.id} active={draft.language === item.id} onClick={() => setDraft((current) => ({ ...current, language: item.id }))}>{item.label}</Chip>)}</div>
     <button className="primary-button full-width" onClick={save} type="button">Save preferences</button>

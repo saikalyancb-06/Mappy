@@ -123,10 +123,28 @@ def _postgres_extensions() -> None:
             connection.execute(text("ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS embedding_vec vector"))
 
 
+_INDEXES = (
+    # City intelligence look-ups; created idempotently on SQLite and Postgres.
+    ("ix_pois_destination_category", "pois", "destination_id, category"),
+    ("ix_pois_destination_kind", "pois", "destination_id, kind"),
+    ("ix_pois_source_external", "pois", "destination_id, source, external_place_id"),
+    ("ix_pois_lat_lon", "pois", "lat, lon"),
+    ("ix_knowledge_destination_kind", "knowledge_chunks", "destination_id, kind"),
+    ("ix_destinations_status", "destinations", "enrichment_status"),
+)
+
+
+def _ensure_indexes() -> None:
+    with engine.begin() as connection:
+        for name, table, columns in _INDEXES:
+            connection.execute(text(f'CREATE INDEX IF NOT EXISTS {name} ON "{table}" ({columns})'))
+
+
 def init_db() -> None:
     _upgrade_legacy_schema()
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+    _ensure_indexes()
     if engine.dialect.name == "postgresql":
         _postgres_extensions()
     with SessionLocal() as db:

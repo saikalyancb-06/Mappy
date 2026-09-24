@@ -79,6 +79,9 @@ export const resolveDestination = (q) => request(`/api/destinations/resolve?q=${
 export const describeLocation = (userLocation) => request(`/api/location/describe${contextParams({ userLocation })}`)
 export const prefetchArea = (context) => request('/api/destinations/prefetch', { method: 'POST', body: JSON.stringify({ ...(context.userLocation || {}), destination_id: context.destination?.destination_id, name: context.destination?.destination_id ? null : context.destination?.name }) })
 export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/${jobId}`)
+// City intelligence: selecting a city registers it and prepares its guide in the background.
+export const ensureCity = (place) => request('/api/destinations/ensure', { method: 'POST', body: JSON.stringify(place.destination_id ? { destination_id: place.destination_id } : { name: place.name, lat: place.lat, lon: place.lon, country: place.country, region: place.region }) })
+export const getCityStatus = (destinationId) => request(`/api/destinations/${encodeURIComponent(destinationId)}/status`)
 
 // ---- screens ----
 export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)

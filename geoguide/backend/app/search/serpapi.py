@@ -133,29 +133,7 @@ class SerpApiClient:
             return SearchResponse(payload["query"], payload["engine"], [SearchResult(**item) for item in payload["results"]], payload["retrieved_at"], cached=True)
 
         started = time.monotonic()
-        try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(SERPAPI_URL, params=params)
-            if response.status_code == 429:
-                raise SearchProviderError("rate_limited", "Web search rate limit reached.", retryable=True)
-            if response.status_code in (401, 403):
-                raise SearchProviderError("unauthorized", "Web search key was rejected.")
-            if response.status_code >= 500:
-                raise SearchProviderError("provider_failure", "Web search provider is temporarily unavailable.", retryable=True)
-            response.raise_for_status()
-            payload = response.json()
-        except SearchProviderError:
-            raise
-        except httpx.TimeoutException:
-            raise SearchProviderError("timeout", "Web search timed out.", retryable=True) from None
-        except httpx.HTTPStatusError:
-            raise SearchProviderError("provider_failure", "Web search provider rejected the request.") from None
-        except httpx.HTTPError:
-            raise SearchProviderError("unreachable", "Web search provider could not be reached.") from None
-        except ValueError:
-            raise SearchProviderError("malformed_response", "Web search returned an invalid response.") from None
-        if not isinstance(payload, dict):
-            raise SearchProviderError("malformed_response", "Web search returned an invalid response.")
+        payload = self._fetch(params)
         if payload.get("error") and not any(payload.get(key) for key in ("local_results", "organic_results", "news_results", "events_results", "place_results", "properties")):
             error = str(payload.get("error"))
             if "hasn't returned any results" in error or "no results" in error.lower():
@@ -174,6 +152,56 @@ class SerpApiClient:
         cache_set("serpapi", cache_key, {"query": normalized, "engine": engine, "results": [asdict(r) for r in results], "retrieved_at": retrieved_at}, CACHE_TTL_WEB_S, source="serpapi")
         logger.info("web_search engine=%s results=%d latency_ms=%d", engine, len(results), int((time.monotonic() - started) * 1000))
         return search_response
+
+    def _fetch(self, params: dict[str, Any]) -> dict[str, Any]:
+        """One HTTP call to SerpApi with provider errors mapped to SearchProviderError (the key stays server-side)."""
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.get(SERPAPI_URL, params=params)
+            if response.status_code == 429:
+                raise SearchProviderError("rate_limited", "Web search rate limit reached.", retryable=True)
+            if response.status_code in (401, 403):
+                raise SearchProviderError("unauthorized", "Web search key was rejected.")
+            if response.status_code >= 500:
+                raise SearchProviderError("provider_failure", "Web search provider is temporarily unavailable.", retryable=True)
+            response.raise_for_status()
+            payload = response.json()
+        except SearchProviderError:
+            logger.warning("serpapi_failure engine=%s", params.get("engine"))
+            raise
+        except httpx.TimeoutException:
+            logger.warning("serpapi_failure engine=%s code=timeout", params.get("engine"))
+            raise SearchProviderError("timeout", "Web search timed out.", retryable=True) from None
+        except httpx.HTTPStatusError:
+            raise SearchProviderError("provider_failure", "Web search provider rejected the request.") from None
+        except httpx.HTTPError:
+            raise SearchProviderError("unreachable", "Web search provider could not be reached.") from None
+        except ValueError:
+            raise SearchProviderError("malformed_response", "Web search returned an invalid response.") from None
+        if not isinstance(payload, dict):
+            raise SearchProviderError("malformed_response", "Web search returned an invalid response.")
+        return payload
+
+    def fetch_json(self, params: dict[str, Any], ttl_s: int) -> tuple[dict[str, Any], bool]:
+        """Raw SerpApi JSON for provider adapters (cached). Returns (payload, cached)."""
+        if not self.api_key:
+            raise SearchProviderError("web_search_unavailable", "Web search is not configured (SERPAPI_KEY).")
+        request = {**params, "api_key": self.api_key}
+        cache_key = hashlib.sha256(repr(sorted((k, v) for k, v in request.items() if k != "api_key")).encode()).hexdigest()
+        cached = cache_get("serpapi_raw", cache_key)
+        if cached is not None:
+            logger.info("cache_hit namespace=serpapi_raw engine=%s", params.get("engine"))
+            return cached["data"], True
+        logger.info("cache_miss namespace=serpapi_raw engine=%s", params.get("engine"))
+        started = time.monotonic()
+        payload = self._fetch(request)
+        if payload.get("error") and not any(payload.get(key) for key in ("local_results", "place_results")):
+            error = str(payload.get("error"))
+            if "hasn't returned any results" not in error and "no results" not in error.lower():
+                raise SearchProviderError("provider_failure", f"Web search error: {error[:120]}")
+        cache_set("serpapi_raw", cache_key, payload, ttl_s, source="serpapi")
+        logger.info("serpapi_request engine=%s type=%s latency_ms=%d", params.get("engine"), params.get("type", ""), int((time.monotonic() - started) * 1000))
+        return payload, False
 
     @staticmethod
     def parse(payload: dict[str, Any], engine: str, limit: int = 10) -> list[SearchResult]:

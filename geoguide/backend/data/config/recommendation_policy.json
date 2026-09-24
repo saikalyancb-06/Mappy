@@ -1,0 +1,10 @@
+{
+  "_comment": "Deterministic recommendation policy, applied by app/policy/recommendation.py to every recommendation and discovery path (ranking, city place lists, knowledge retrieval, itineraries). It never changes an explicit factual question about a named place. Rules are religion-neutral: places of worship are treated alike, whatever the faith. Deployments may list categories or provider types never to suggest; both lists are empty by default.",
+  "never_recommend_statuses": ["permanently_closed"],
+  "excluded_categories": [],
+  "excluded_provider_types": [],
+  "place_of_worship": {
+    "categories": ["temple"],
+    "provider_type_terms": ["place of worship", "temple", "hindu temple", "jain temple", "buddhist temple", "church", "cathedral", "chapel", "basilica", "mosque", "masjid", "gurdwara", "gurudwara", "synagogue", "monastery", "shrine", "religious destination", "religious institution"]
+  }
+}

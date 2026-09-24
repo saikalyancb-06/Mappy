@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
-import { describeLocation, getConfig, getCurrentUser, getHealth, getPreferences, getPrefetchStatus, getToken, logIn, logOut, prefetchArea, recordInteraction, signUp, updatePreferences } from './api'
+import { describeLocation, ensureCity, getCityStatus, getConfig, getCurrentUser, getHealth, getPreferences, getToken, logIn, logOut, recordInteraction, signUp, updatePreferences } from './api'
 import ContextBar from './components/ContextBar'
 import { BottomTabBar, Chip, StateMessage } from './components/ui'
 import { useDeviceLocation } from './hooks/useDeviceLocation'
@@ -83,7 +83,8 @@ function App() {
   const [askPlace, setAskPlace] = useState(null)
   const [savedIds, setSavedIds] = useState(() => readJson(SAVED_KEY, []))
   const [selectedDate, setSelectedDate] = useState(null) // null = the city's today; set by the Explore date picker
-  const [prefetch, setPrefetch] = useState(null)
+  const [preparing, setPreparing] = useState(null) // { destination_id, status, progress, components } while a city guide is being built
+  const [dataVersion, setDataVersion] = useState(0) // bumps when new city data lands, so screens reload
   const [debugAvailable, setDebugAvailable] = useState(false)
   const device = useDeviceLocation()
   const [stableLocation, setStableLocation] = useState(device.location)
@@ -113,7 +114,7 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [device.location])
 
-  const context = useMemo(() => ({ userLocation: stableLocation, destination }), [stableLocation, destination])
+  const context = useMemo(() => ({ userLocation: stableLocation, destination, dataVersion }), [stableLocation, destination, dataVersion])
 
   // Which city the device is in (shown in the context bar; lets the traveller switch to it).
   const [hereState, setHereState] = useState({ location: null, city: null })
@@ -127,12 +128,29 @@ function App() {
   }, [stableLocation])
   const here = stableLocation && hereState.location === stableLocation ? hereState.city : null
 
-  // Warm stores for a non-curated destination (OpenStreetMap + weather) and show progress.
+  // City preparation: poll the city's status while its guide is being built; reload screens as data lands.
   useEffect(() => {
-    if (!prefetch?.job_id || ['completed', 'failed'].includes(prefetch.status)) return undefined
-    const timer = window.setInterval(() => getPrefetchStatus(prefetch.job_id).then(setPrefetch).catch(() => setPrefetch((current) => ({ ...current, status: 'failed' }))), 1500)
+    if (!preparing?.destination_id || !['QUEUED', 'ENRICHING'].includes(preparing.status)) return undefined
+    const timer = window.setInterval(() => {
+      getCityStatus(preparing.destination_id).then((result) => {
+        const next = { destination_id: preparing.destination_id, status: result.status.status, progress: result.status.progress, components: result.status.components, places: result.status.place_count }
+        if (next.places !== preparing.places || !['QUEUED', 'ENRICHING'].includes(next.status)) setDataVersion((v) => v + 1)
+        setPreparing(next)
+      }).catch(() => setPreparing(null))
+    }, 2000)
     return () => window.clearInterval(timer)
-  }, [prefetch])
+  }, [preparing])
+
+  // Selecting a city registers it (canonical id) and starts background preparation if anything is missing.
+  const checkedCities = useRef(new Set())
+  const prepareCity = useCallback((place) => {
+    if (place.destination_id) checkedCities.current.add(place.destination_id)
+    return ensureCity(place).then((result) => {
+    checkedCities.current.add(result.city.id)
+    setPreparing({ destination_id: result.city.id, status: result.status.status, progress: result.status.progress, components: result.status.components, places: result.status.place_count })
+    return result.city
+    })
+  }, [])
 
   const chooseDestination = useCallback((place) => {
     const next = { name: place.name, destination_id: place.destination_id || null, lat: place.lat, lon: place.lon, region: place.region, country: place.country, coverage_radius_km: place.coverage_radius_km, kind: place.kind }
@@ -140,8 +158,22 @@ function App() {
     writeJson(DESTINATION_KEY, next)
     setChoosingStart(false)
     setSelectedPlace(null)
-    if (!next.destination_id) prefetchArea({ destination: next }).then(setPrefetch).catch(() => setPrefetch(null))
-  }, [])
+    prepareCity(next).then((city) => {
+      if (city.id === next.destination_id) return
+      // A new or merged city: adopt its canonical record so every screen uses the registry id.
+      const canonical = { ...next, name: city.name, destination_id: city.id, lat: city.lat, lon: city.lon, region: city.region, country: city.country, coverage_radius_km: city.coverage_radius_km, kind: 'destination' }
+      setDestination(canonical)
+      writeJson(DESTINATION_KEY, canonical)
+    }).catch(() => setPreparing(null))
+  }, [prepareCity])
+
+  // A city chosen in an earlier session is re-checked once (stale parts refresh in the background).
+  useEffect(() => {
+    if (!user || !destination?.destination_id || checkedCities.current.has(destination.destination_id)) return undefined
+    checkedCities.current.add(destination.destination_id)
+    const timer = window.setTimeout(() => { prepareCity(destination).catch(() => {}) }, 0)
+    return () => window.clearTimeout(timer)
+  }, [user, destination?.destination_id, prepareCity]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearDestination = () => { setDestination(null); writeJson(DESTINATION_KEY, null) }
 
@@ -219,7 +251,7 @@ function App() {
   return <div className="app-frame">
     <main className={`app-scroll ${selectedPlace ? 'detail-scroll' : ''}`}>
       {!selectedPlace && <ContextBar destination={destination} device={device} here={stableLocation ? here : null} onExploreHere={() => here?.destination_id && chooseDestination(here)} onChangeDestination={() => setChoosingStart(true)} onClearDestination={clearDestination} onEnableLocation={device.start} />}
-      {prefetch && prefetch.status !== 'completed' && !selectedPlace && <section className="ingestion-card"><div className="verified-row"><span className="verified-dot" /> Preparing {destination?.name} <strong>{prefetch.progress || 0}%</strong></div><div className="progress-track"><span style={{ width: `${prefetch.progress || 0}%` }} /></div><p>{prefetch.status === 'failed' ? `Some sources could not be loaded${prefetch.error ? ` (${prefetch.error})` : ''}. You can keep exploring with what is available.` : 'Collecting places and live conditions for this area.'}</p></section>}
+      {preparing && ['QUEUED', 'ENRICHING'].includes(preparing.status) && preparing.destination_id === destination?.destination_id && !selectedPlace && <section className="ingestion-card"><div className="verified-row"><span className="verified-dot" /> Preparing your {destination?.name} guide… <strong>{preparing.progress || 0}%</strong></div><div className="progress-track"><span style={{ width: `${Math.max(5, preparing.progress || 0)}%` }} /></div><p>{Object.entries(preparing.components || {}).filter(([, c]) => ['done', 'empty'].includes(c.status)).map(([name]) => name).join(' · ') || 'Collecting famous places, history and local knowledge.'}{preparing.places ? ` · ${preparing.places} places so far` : ''}. You can start exploring now; answers get richer as it fills in.</p></section>}
       {selectedPlace
         ? <PlaceDetailView place={selectedPlace} context={context} saved={savedIds.includes(selectedPlace.id)} onSave={toggleSaved} onBack={() => setSelectedPlace(null)} onAsk={(place) => { setAskPlace(place); setSelectedPlace(null); setActiveTab('ask') }} />
         : views[activeTab]}

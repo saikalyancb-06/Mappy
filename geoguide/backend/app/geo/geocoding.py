@@ -51,6 +51,9 @@ class ResolvedPlace:
     source: str = "database"
     confidence: float = 0.0
     alternatives: list[dict[str, Any]] = field(default_factory=list)
+    population: int | None = None
+    boundary_km: float | None = None  # half-diagonal of the geocoder's bounding box (settlements)
+    external_ids: dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -150,7 +153,23 @@ def _nominatim_result(item: dict[str, Any], name: str) -> dict[str, Any] | None:
     if not item or not valid_coordinates(item.get("lat"), item.get("lon")):
         return None
     address = item.get("address") or {}
+    extratags = item.get("extratags") or {}
+    try:
+        population = int(str(extratags.get("population", "")).replace(",", "").split(";")[0]) if extratags.get("population") else None
+    except ValueError:
+        population = None
+    boundary = None
+    box = item.get("boundingbox")
+    if isinstance(box, list) and len(box) == 4:
+        try:
+            south, north, west, east = (float(v) for v in box)
+            boundary = round(min(40.0, max(3.0, max(haversine_km(float(item["lat"]), float(item["lon"]), lat_, lon_) for lat_ in (south, north) for lon_ in (west, east)))), 1)
+        except (TypeError, ValueError):
+            boundary = None
     return {
+        "population": population,
+        "boundary_km": boundary,
+        "external_ids": {k: v for k, v in {"osm": f"{item.get('osm_type')}/{item.get('osm_id')}" if item.get("osm_id") else None, "wikidata": extratags.get("wikidata")}.items() if v},
         "name": address.get("city") or address.get("town") or address.get("village") or item.get("name") or name,
         "place_name": item.get("name") or name,
         "display_name": item.get("display_name"),
@@ -175,7 +194,7 @@ def _nominatim_query(name: str, near: tuple[float, float] | None, bounded: bool)
     cached = cache_get("geocode", key)
     if cached is not None:
         return cached["data"]
-    params: dict[str, Any] = {"q": name, "format": "jsonv2", "limit": 1, "addressdetails": 1, "accept-language": rules["language"]}
+    params: dict[str, Any] = {"q": name, "format": "jsonv2", "limit": 1, "addressdetails": 1, "extratags": 1, "accept-language": rules["language"]}
     if near and bounded:
         params.update(viewbox=_viewbox(near, float(rules["local_bias_km"])), bounded=1)
     payload = get_json("nominatim", f"{NOMINATIM_URL}/search", params=params, timeout=6.0)
@@ -259,6 +278,9 @@ def resolve_place(name: str, near: tuple[float, float] | None = None, allow_remo
         timezone=destination.timezone if destination else None,
         source="nominatim",
         confidence=0.7,
+        population=found.get("population") if settlement else None,
+        boundary_km=found.get("boundary_km") if settlement else None,
+        external_ids=found.get("external_ids") or {},
     ), errors
 
 
@@ -280,7 +302,7 @@ def reverse_geocode(lat: float, lon: float) -> tuple[dict[str, Any] | None, list
     destination = nearest_destination(lat, lon)
     if destination:
         return {"name": destination.name, "region": destination.region, "country": destination.country, "destination_id": destination.id, "source": "database"}, []
-    key = f"en|{lat:.3f},{lon:.3f}"
+    key = f"en|{lat:.2f},{lon:.2f}"  # ~1 km: the cache never holds a traveller's precise position
     cached = cache_get("reverse_geocode", key)
     if cached is not None:
         return cached["data"], []

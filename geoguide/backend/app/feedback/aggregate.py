@@ -36,6 +36,7 @@ from app.db.models import (
     FeedbackVibe,
     PlaceAspectSignal,
     PlaceFeedbackSummary,
+    PlaceReviewSignal,
     PlaceVibeProfile,
     Poi,
     UserAspectPreference,
@@ -122,13 +123,28 @@ def recompute_place(place_id: str, now: datetime | None = None) -> None:
         for link in vibe_links:
             selections[link.vibe_id] += weight[link.feedback_id] * link.weight
             support[link.vibe_id] += 1
+        # Provider reviews are extra, down-weighted evidence (capped), never a replacement for GeoGuide feedback.
+        review_rows = db.scalars(select(PlaceReviewSignal).where(PlaceReviewSignal.poi_id == place_id)).all()
+        reviews_read = max((row.reviews_read for row in review_rows), default=0)
+        review_total = agg.get("review_weight", 0.3) * min(reviews_read, agg.get("review_cap", 20))
+        vibe_ids = {v.key: vid for vid, v in vibes_by_id.items()}
+        aspect_ids = {a.key: aid for aid, a in aspects_by_id.items()}
+        review_aspects: dict[int, float] = defaultdict(float)
+        for row in review_rows:
+            share = review_total * min(1.0, row.evidence_count / max(1, reviews_read))
+            if row.kind == "vibe" and row.key in vibe_ids and row.polarity > 0:
+                selections[vibe_ids[row.key]] += share
+                support[vibe_ids[row.key]] += row.evidence_count
+            elif row.kind == "aspect" and row.key in aspect_ids and row.polarity < 0:
+                review_aspects[aspect_ids[row.key]] += share
+        total += review_total
         k = agg["prior_strength"]
         db.execute(delete(PlaceVibeProfile).where(PlaceVibeProfile.place_id == place_id))
         for vibe_id, vibe in vibes_by_id.items():
             if vibe.status != "active":
                 continue
             prior = vibe_prior(place, vibe.key)
-            if not support[vibe_id] and prior <= agg["prior_base"] and not feedbacks:
+            if not support[vibe_id] and prior <= agg["prior_base"] and not feedbacks and not review_rows:
                 continue
             db.add(PlaceVibeProfile(place_id=place_id, vibe_id=vibe_id, score=round((selections[vibe_id] + k * prior) / (total + k), 4), selections=round(selections[vibe_id], 4), support=support[vibe_id], confidence=round(total / (total + k), 4), updated_at=utcnow()))
 
@@ -137,6 +153,9 @@ def recompute_place(place_id: str, now: datetime | None = None) -> None:
         for link in aspect_links:
             aspect_hits[link.aspect_id] += weight[link.feedback_id] * link.weight
             aspect_support[link.aspect_id] += 1
+        for aspect_id, share in review_aspects.items():
+            aspect_hits[aspect_id] += share
+            aspect_support[aspect_id] += 1
         kn = agg["negative_prior_strength"]
         db.execute(delete(PlaceAspectSignal).where(PlaceAspectSignal.place_id == place_id))
         for aspect_id, aspect in aspects_by_id.items():
