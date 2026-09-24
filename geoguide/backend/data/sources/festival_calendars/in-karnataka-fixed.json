@@ -1,0 +1,22 @@
+{
+  "id": "in-ka-fixed",
+  "title": "Karnataka state days (fixed dates)",
+  "authority": "Government of Karnataka",
+  "document": "Karnataka Rajyotsava, the state formation day (1 November 1956), is a state general holiday every year",
+  "source_url": "https://www.karnataka.gov.in/",
+  "country": "IN",
+  "regions": [
+    "Karnataka"
+  ],
+  "verification": "Fixed-date state day; the same date every year. Karnataka's festival holidays for 2026 are not included because published copies of the state list disagree on some dates.",
+  "verified_on": "2026-09-24",
+  "note": "State holiday in Karnataka.",
+  "entries": [
+    {
+      "title": "Karnataka Rajyotsava",
+      "annual": "11-01",
+      "category": "cultural",
+      "kind": "state_day"
+    }
+  ]
+}

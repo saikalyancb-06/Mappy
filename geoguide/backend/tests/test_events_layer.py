@@ -92,7 +92,7 @@ def test_missing_coordinates_keep_city_events_and_link_known_venues():
 def test_same_event_from_two_providers_is_merged_and_corroborated():
     a = ev("Monsoon Music Nights 2026", TOMORROW, time(19, 0), provider="ticketmaster", kind="ticketmaster", reliability=0.9)
     b = ev("Monsoon Music Nights", TOMORROW, time(19, 0), provider="google_events", kind="google_events", reliability=0.65, lat=None, lon=None, venue="Town Hall")
-    result = run(single(TOMORROW), Fake("ticketmaster", [a]), Fake("google_events", [b]))
+    result = run(single(TOMORROW), Fake("tm_fake", [a]), Fake("ge_fake", [b]))
     assert len(result["events"]) == 1 and result["counts"]["duplicates"] == 1
     merged = result["events"][0]
     assert len(merged.sources) == 2 and merged.sources[0].provider == "ticketmaster" and "Reported by 2 sources" in merged.confidence_notes
@@ -253,3 +253,36 @@ def test_web_fallback_runs_when_structured_results_do_not_match_the_request():
     assert CountingWeb.calls == 1  # six events, none of them music → look further
     run(single(TOMORROW), Fake("f", many_food), CountingWeb(SerpApiClient(api_key="k")), categories=["food"])
     assert CountingWeb.calls == 1  # enough matching events → no web search
+
+
+# ---- country coverage -----------------------------------------------------------------------------
+
+def _city_in(code, name):
+    from app.geo.city import City
+
+    return City(name=name, country=None, region=None, lat=12.97, lon=77.59, timezone="UTC", country_code=code)
+
+
+def test_ticketmaster_is_skipped_where_it_has_no_coverage(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.events.providers.ticketmaster.get_json", lambda *a, **k: calls.append(k) or {"page": {"totalPages": 1}})
+    provider = TicketmasterProvider(api_key="k", url="https://tm.example/discovery/v2/events.json")
+    india = find_events(build_query(_city_in("IN", "Bengaluru"), single(TOMORROW)), providers=[provider])
+    status = india["providers"][0]
+    assert status.status == "not_applicable" and status.error["message"] == "Ticketmaster has little or no coverage in IN; skipped."
+    assert calls == []  # no wasted request
+    find_events(build_query(_city_in("US", "Austin"), single(TOMORROW)), providers=[provider])
+    assert len(calls) == 1
+
+
+def test_country_is_derived_from_the_name_when_no_code_is_stored():
+    from app.geo.city import City, country_code
+
+    assert country_code(City(name="Pune", country="India", region=None, lat=18.5, lon=73.8)) == "IN"
+    assert country_code(City(name="Nowhere", country="Atlantis", region=None, lat=0, lon=0)) is None
+
+
+def test_indian_cities_search_local_event_platforms():
+    queries = build_queries(build_query(_city_in("IN", "Bengaluru"), single(TOMORROW), categories=["comedy"]))
+    assert queries[0].startswith("comedy Bengaluru") and "site:in.bookmyshow.com" in queries[0] and "site:district.in" in queries[0]
+    assert not any("site:" in q for q in build_queries(build_query(_city_in("US", "Austin"), single(TOMORROW))))

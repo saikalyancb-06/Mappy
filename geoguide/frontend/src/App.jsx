@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
-import { getConfig, getCurrentUser, getHealth, getPreferences, getPrefetchStatus, getToken, logIn, logOut, prefetchArea, recordInteraction, signUp, updatePreferences } from './api'
+import { describeLocation, getConfig, getCurrentUser, getHealth, getPreferences, getPrefetchStatus, getToken, logIn, logOut, prefetchArea, recordInteraction, signUp, updatePreferences } from './api'
 import ContextBar from './components/ContextBar'
 import { BottomTabBar, Chip, StateMessage } from './components/ui'
 import { useDeviceLocation } from './hooks/useDeviceLocation'
@@ -115,6 +115,15 @@ function App() {
 
   const context = useMemo(() => ({ userLocation: stableLocation, destination }), [stableLocation, destination])
 
+  // Which city the device is in (shown in the context bar; lets the traveller switch to it).
+  const [here, setHere] = useState(null)
+  useEffect(() => {
+    if (!stableLocation) return undefined
+    let cancelled = false
+    describeLocation(stableLocation).then((result) => { if (!cancelled) setHere(result.city || null) }).catch(() => { if (!cancelled) setHere(null) })
+    return () => { cancelled = true }
+  }, [stableLocation])
+
   // Warm stores for a non-curated destination (OpenStreetMap + weather) and show progress.
   useEffect(() => {
     if (!prefetch?.job_id || ['completed', 'failed'].includes(prefetch.status)) return undefined
@@ -187,7 +196,7 @@ function App() {
 
   return <div className="app-frame">
     <main className={`app-scroll ${selectedPlace ? 'detail-scroll' : ''}`}>
-      {!selectedPlace && <ContextBar destination={destination} device={device} onChangeDestination={() => setChoosingStart(true)} onClearDestination={clearDestination} onEnableLocation={device.start} />}
+      {!selectedPlace && <ContextBar destination={destination} device={device} here={stableLocation ? here : null} onExploreHere={() => here?.destination_id && chooseDestination(here)} onChangeDestination={() => setChoosingStart(true)} onClearDestination={clearDestination} onEnableLocation={device.start} />}
       {prefetch && prefetch.status !== 'completed' && !selectedPlace && <section className="ingestion-card"><div className="verified-row"><span className="verified-dot" /> Preparing {destination?.name} <strong>{prefetch.progress || 0}%</strong></div><div className="progress-track"><span style={{ width: `${prefetch.progress || 0}%` }} /></div><p>{prefetch.status === 'failed' ? `Some sources could not be loaded${prefetch.error ? ` (${prefetch.error})` : ''}. You can keep exploring with what is available.` : 'Collecting places and live conditions for this area.'}</p></section>}
       {selectedPlace
         ? <PlaceDetailView place={selectedPlace} context={context} saved={savedIds.includes(selectedPlace.id)} onSave={toggleSaved} onBack={() => setSelectedPlace(null)} onAsk={(place) => { setAskPlace(place); setSelectedPlace(null); setActiveTab('ask') }} />

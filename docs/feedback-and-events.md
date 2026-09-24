@@ -162,16 +162,41 @@ intent (app/events/intent.py: categories, free, festivals, near me)
 
 `EventProvider` defines `search_events(query) → ProviderResult`, `get_event(id)` and `health_check()`. Adding a provider means adding a class to `default_providers()`; ranking doesn't change. A provider that fails or throws is reported (`status: error`) and the others still answer. Past dates skip live providers (`not_applicable`).
 
+**Country coverage.** `events.json → provider_coverage` lists the countries each provider actually serves; an empty list means everywhere. A provider outside its countries is skipped before any request is made and reported as `not_applicable` (`no_coverage`). Ticketmaster is limited to the markets it sells in (US, Canada, Mexico, UK, Ireland, Australia/NZ, much of Europe, UAE, South Africa), so it is **not used for India**. The country comes from the city's stored ISO code, or from its country name via `data/config/countries.json`.
+
+**Local event platforms.** For countries listed in `events.json → country_sources`, the web fallback adds a search restricted to that country's ticketing and listing sites. India uses BookMyShow, District, Insider, Skillboxes, Townscript and AllEvents. None of these offers a public API, so their listings arrive through Google Events and site-restricted web search, and they go through the same single-event and date validation as any other page. Google Events is also localised with the city's country (`gl`).
+
 | Provider | Needs | Reliability |
 |---|---|---|
 | Stored (curated / dataset) | nothing | 0.8 / 0.55 |
-| Ticketmaster | `TICKETMASTER_API_KEY` | 0.9 |
+| Official calendars | files in `data/sources/festival_calendars/` | 0.85 |
+| Reviewed submissions (stored) | `EVENT_MODERATOR_EMAILS` for reviewers | 0.7 |
+| Ticketmaster | `TICKETMASTER_API_KEY`; only in covered countries (not India) | 0.9 |
 | Google Events | `SERPAPI_KEY` | 0.65 |
-| Web pages | `SERPAPI_KEY` | official 0.85 · event platform 0.7 · news 0.6 · aggregator 0.4 · unknown 0.35 |
+| Web pages (+ country platforms such as BookMyShow and District) | `SERPAPI_KEY` | official 0.85 · event platform 0.7 · news 0.6 · aggregator 0.4 · unknown 0.35 |
 
 Keys stay on the server. `GET /api/events/providers` reports only whether each provider is configured. `httpx` request logging is silenced because keys travel as query parameters.
 
+**Official festival calendars** (`app/events/providers/calendar.py`). Each JSON file in `data/sources/festival_calendars/` is one published government calendar. It names a country and, optionally, the states it applies to, plus its authority, source link and verification date. Entries are either dated for one year (`"date": "2026-11-08"`) or fixed every year (`"annual": "11-01"`), and dates that depend on the moon are flagged so the card says the date may shift by a day. Calendar days apply to every city in that country or state, with no venue and no price, and the card links to the calendar. The files included are the Central Government gazetted holidays for 2026 (DoPT order of 3 July 2025), India's fixed national days, and Karnataka Rajyotsava. The 2026 dates were cross-checked against several published copies because the official PDF was not reachable from the build environment. Karnataka's 2026 festival list is left out because published copies disagree on some dates. To add a state, drop in another file with dates taken from its official order.
+
+**Organiser submissions** (`app/events/submissions.py`, `POST /api/events/submissions`). A logged-in organiser, venue or attendee sends an event using "Know an event that's missing? Add it" under *What's happening*. It is validated before anyone reviews it:
+- **Required fields:** a city from the stored list and a venue.
+- **Dates:** real dates, no more than 60 days long, not already over, and at most about a year ahead.
+- **Times:** 24-hour format.
+- **Venue location:** coordinates, if given, must be in or near the city.
+- **Price and links:** a price and a 3-letter currency when the event is paid; links must be http(s).
+
+Near-identical titles on overlapping dates in the same city are rejected as duplicates, and each user can have at most 10 submissions pending. Nothing is shown until a moderator approves it. Moderators are the accounts listed in `EVENT_MODERATOR_EMAILS`, and they review in *Profile*, where rejecting requires a reason the submitter can see. An approved event becomes a stored event with the source "<organiser> (organiser submission, reviewed)". The contact email is only visible to moderators.
+
 **Web validation.** A result becomes an event only if it is a single event (round-ups like "Top 10 events in…" are dropped), it has an explicit date inside the range (an unreadable date means the result is dropped, never guessed), and it names the destination or a venue. Price is classified as free, paid, donation or unknown from the page text.
+
+### Location: which city you are in, and what "city centre" means
+
+* **City extent** (`data/config/geo.json → city_extent`). A stored city's `coverage_radius_km` only measures how far its stored places spread (Bengaluru: 9.4 km). Location detection instead uses `max(coverage, 6 km × √population in millions)`, capped at 30 km (Bengaluru: about 22 km). Whitefield, Electronic City and Yelahanka are therefore recognised as Bengaluru. Retrieval radii are unchanged.
+* **Aliases.** Common and historical names such as Bangalore, Bombay, Mysore, Trivandrum and Cochin resolve to the stored city, both in questions and when reverse geocoding returns a different name.
+* **"City centre", "downtown", "the center"** mean the centre of the city you are exploring, or of the city your GPS is in. They are never geocoded. The radius is a quarter of the city's extent, kept between 2 and 6 km. Before this change, "near city center" went to Nominatim with no location bias, and its first worldwide match was a Tallinn district named "City Centre".
+* **Nominatim is biased to you.** Names are looked up inside a box of about 60 km around the destination being explored, or around you, first. A match outside it is accepted only if it is a settlement or a well-known place (`importance ≥ 0.5`). Generic names ("bus stand", "railway station") are never searched worldwide. Results are requested in English.
+* The context bar shows the city your GPS is in ("You · Bengaluru"). When a destination saved earlier is somewhere else, it offers "You're in Bengaluru · explore here".
 
 ### De-duplication (`app/events/quality.py`)
 

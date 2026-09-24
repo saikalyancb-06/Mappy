@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, RefreshCw, UtensilsCrossed, Volume2 } from 'lucide-react'
+import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, Plus, RefreshCw, UtensilsCrossed, Volume2 } from 'lucide-react'
 import { getCityContext, getEventsOverview, getHotels, getNearby } from '../api'
 import RichText from '../components/RichText'
 import SearchBox from '../components/SearchBox'
+import EventSubmitSheet from '../components/EventSubmitSheet'
 import { AdvisoryList, Chip, EventCard, IconCircleButton, Notices, PlaceCard, SectionTitle, StateMessage, TipList } from '../components/ui'
 import { addDays, formatDay, relativeDay, titleCase, upcomingSaturday } from '../format'
 
@@ -66,6 +67,7 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
   const [mode, setMode] = useState('overview')
   const [eventsNear, setEventsNear] = useState('destination') // destination | me
   const [eventTab, setEventTab] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
   const [ctx, loadContext] = useLatest(useCallback(() => getCityContext(context, { date: selectedDate, language }), [context, selectedDate, language]))
   const selected = ctx.data?.date?.selected || selectedDate
   const origin = context.destination ? 'destination' : 'auto'
@@ -173,6 +175,7 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
             <SectionTitle eyebrow="Associated with this city">Dates not confirmed for this period</SectionTitle>
             <div className="event-list">{events.data.associated_festivals.map((event) => <EventCard key={event.id} event={event} />)}</div>
           </>}
+          {events.data.city.destination_id && <button type="button" className="secondary-button add-event-button" onClick={() => setSubmitting(true)}><Plus size={16} /> Know an event that's missing? Add it</button>}
           <details className="sources-checked"><summary>Sources checked</summary><ul>{events.data.sources_checked.map((s) => <li key={s.provider}>{s.source}: {s.status === 'ok' ? `checked (${s.kept} of ${s.found} kept${s.cached ? ', cached' : ''})` : s.status === 'not_configured' ? 'not configured on this server' : s.status === 'not_applicable' ? s.error?.message : `unavailable${s.error?.message ? ` — ${s.error.message}` : ''}`}</li>)}</ul></details>
         </>
       })()}
@@ -198,5 +201,6 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
       {(mode === 'history' ? data.about : data.culture).map((hit) => <article key={hit.chunk_id} className="knowledge-card"><span className="category-label">{titleCase(hit.category)}</span><h3>{hit.title}</h3><p>{hit.content}</p><small>Source: {hit.source}</small></article>)}
       {mode === 'culture' && <><SectionTitle eyebrow="For this date">Local tips</SectionTitle><TipList tips={data.tips} /></>}
     </>}
+    {submitting && events.data?.city && <EventSubmitSheet city={events.data.city} onClose={() => setSubmitting(false)} />}
   </div>
 }

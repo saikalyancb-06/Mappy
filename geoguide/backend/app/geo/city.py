@@ -20,7 +20,7 @@ from app.core.text import normalize
 from app.db.models import Destination
 from app.geo.distance import haversine_km
 from app.geo.geo_context import all_destinations, destination_by_id
-from app.geo.geocoding import nearest_destination, reverse_geocode
+from app.geo.geocoding import destination_aliases, nearest_destination, reverse_geocode
 
 # A stored destination with the geocoded name must also be this close to count as the same city.
 SAME_CITY_KM = 60.0
@@ -102,7 +102,8 @@ def resolve_city(*, destination_id: str | None = None, lat: float | None = None,
         return None, errors
     wanted, country = normalize(city_name), normalize(named.get("country") or "")
     for destination in all_destinations():
-        if normalize(destination.name) == wanted and (not country or normalize(destination.country or "") == country) and haversine_km(lat, lon, destination.lat, destination.lon) <= SAME_CITY_KM:
+        names = {normalize(destination.name), *(normalize(alias) for alias in destination_aliases(destination))}
+        if wanted in names and (not country or normalize(destination.country or "") == country) and haversine_km(lat, lon, destination.lat, destination.lon) <= SAME_CITY_KM:
             return _from_destination(destination, "geocoder_match"), errors
     return City(name=city_name, country=named.get("country"), region=named.get("region"), lat=lat, lon=lon, resolved_by="geocoder"), errors
 
@@ -125,3 +126,12 @@ def city_from_place(place: Any) -> City:
         if city:
             return city
     return City(name=place.city or place.name, country=place.country, region=place.region, lat=place.lat, lon=place.lon, timezone=place.timezone, resolved_by="geocoder")
+
+
+def country_code(city: City) -> str | None:
+    """ISO alpha-2 for a city: its stored code, else looked up from the country name."""
+    if city.country_code:
+        return city.country_code.upper()
+    from app.core.rules import load_rules
+
+    return load_rules("countries")["names"].get(normalize(city.country or "")) if city.country else None

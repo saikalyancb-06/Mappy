@@ -410,3 +410,16 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .feedback-thanks { display: grid; justify-items: center; gap: 10px; text-align: center; color: var(--forest); padding: 10px 0; }
 .feedback-thanks p { color: var(--ink); font-size: 14px; }
 .vibe-profile { display: grid; gap: 8px; }
+
+/* event submissions */
+.event-submit-sheet label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink, #1d2b22); }
+.event-submit-sheet label small { color: var(--muted); font-weight: 600; }
+.event-submit-sheet input, .event-submit-sheet select { width: 100%; min-height: 40px; border-radius: 12px; border: 1px solid var(--line); padding: 0 10px; font: inherit; background: white; }
+.event-submit-sheet .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.add-event-button { width: 100%; margin: 12px 0; }
+.submission-list { display: grid; gap: 10px; margin-bottom: 18px; }
+.submission-card { display: grid; gap: 6px; padding: 14px; border-radius: 18px; background: rgba(255,255,255,.8); border: 1px solid var(--line); }
+.submission-card h3 { font-size: 16px; }
+.submission-card textarea { width: 100%; border-radius: 12px; border: 1px solid var(--line); padding: 8px 10px; font: inherit; }
+.submission-card.status-approved .category-label { color: var(--forest); }
+.submission-card.status-rejected .category-label { color: #a0402b; }

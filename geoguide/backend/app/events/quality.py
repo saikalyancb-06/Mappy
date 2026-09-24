@@ -112,7 +112,7 @@ def assess(event: NormalisedEvent) -> None:
     value = 0.45 * parts["source"] + 0.15 * parts["date"] + 0.1 * parts["venue"] + 0.1 * parts["coordinates"] + 0.1 * parts["corroboration"] + 0.1 * parts["freshness"]
     notes = []
     kind = event.sources[0].kind
-    notes.append({"ticketmaster": "Ticketing platform listing", "web_authoritative": "Official source", "web_platform": "Established event platform", "stored_curated": "Curated record", "stored_dataset": "Organiser dataset (synthetic)", "google_events": "Event listing", "web_news": "News report", "web_aggregator": "Aggregator listing — verify", "web_unknown": "Unverified web page — verify"}.get(kind, kind))
+    notes.append({"ticketmaster": "Ticketing platform listing", "web_authoritative": "Official source", "web_platform": "Established event platform", "stored_curated": "Curated record", "stored_dataset": "Organiser dataset (synthetic)", "official_calendar": "Official government calendar", "stored_submission": "Submitted by the organiser — reviewed", "google_events": "Event listing", "web_news": "News report", "web_aggregator": "Aggregator listing — verify", "web_unknown": "Unverified web page — verify"}.get(kind, kind))
     if independent > 1:
         notes.append(f"Reported by {independent} sources")
     if not event.time_known:

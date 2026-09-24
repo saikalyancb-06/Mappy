@@ -82,6 +82,12 @@ export const getCityContext = (context, { date, language = 'en' } = {}) => reque
 export const getEvents = (context, { date, when, end, q, category, free, festival, near, radiusKm } = {}) => request(`/api/events${contextParams(context, { date, when, end, q, category, free: free ? 'true' : null, festival: festival ? 'true' : null, near, radius_km: radiusKm })}`)
 export const getEventsOverview = (context, { date, near } = {}) => request(`/api/events/overview${contextParams(context, { date, near })}`)
 
+// ---- event submissions (reviewed before publishing) ----
+export const submitEvent = (submission) => request('/api/events/submissions', { method: 'POST', body: JSON.stringify(submission) })
+export const getMySubmissions = () => request('/api/events/submissions/mine')
+export const getReviewQueue = () => request('/api/events/submissions/review')
+export const reviewSubmission = (id, decision, note) => request(`/api/events/submissions/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify({ decision, note }) })
+
 // ---- feedback & vibes ----
 export const getFeedbackVocabulary = () => request('/api/feedback/vocabulary')
 export const submitFeedback = (feedback) => request('/api/feedback', { method: 'POST', body: JSON.stringify(feedback) })

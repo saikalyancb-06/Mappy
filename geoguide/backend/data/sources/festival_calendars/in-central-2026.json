@@ -1,0 +1,121 @@
+{
+  "id": "in-dopt-2026",
+  "title": "Central Government gazetted holidays 2026",
+  "authority": "Department of Personnel & Training (DoPT), Government of India",
+  "document": "DoPT Office Memorandum dated 3 July 2025 (holidays to be observed in Central Government offices during 2026)",
+  "source_url": "https://dfe.gov.in/uploads/documents/list-of-gazetted-holidays-2026.pdf",
+  "country": "IN",
+  "regions": [],
+  "year": 2026,
+  "verification": "Dates cross-checked against several published copies of the order on 24 Sept 2026; the official PDF could not be fetched from the build environment. Dates of lunar festivals are subject to the sighting of the moon.",
+  "verified_on": "2026-09-24",
+  "note": "Gazetted holiday for Central Government offices in India. Offices of states may follow their own list.",
+  "entries": [
+    {
+      "title": "Republic Day",
+      "date": "2026-01-26",
+      "category": "cultural",
+      "kind": "national_day"
+    },
+    {
+      "title": "Holi",
+      "date": "2026-03-04",
+      "category": "festivals",
+      "kind": "festival"
+    },
+    {
+      "title": "Id-ul-Fitr",
+      "date": "2026-03-21",
+      "category": "religious",
+      "kind": "festival",
+      "moon_dependent": true
+    },
+    {
+      "title": "Ram Navami",
+      "date": "2026-03-26",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Mahavir Jayanti",
+      "date": "2026-03-31",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Good Friday",
+      "date": "2026-04-03",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Buddha Purnima",
+      "date": "2026-05-01",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Id-ul-Zuha (Bakrid)",
+      "date": "2026-05-27",
+      "category": "religious",
+      "kind": "festival",
+      "moon_dependent": true
+    },
+    {
+      "title": "Muharram",
+      "date": "2026-06-26",
+      "category": "religious",
+      "kind": "festival",
+      "moon_dependent": true
+    },
+    {
+      "title": "Independence Day",
+      "date": "2026-08-15",
+      "category": "cultural",
+      "kind": "national_day"
+    },
+    {
+      "title": "Milad-un-Nabi (Id-e-Milad)",
+      "date": "2026-08-26",
+      "category": "religious",
+      "kind": "festival",
+      "moon_dependent": true
+    },
+    {
+      "title": "Janmashtami",
+      "date": "2026-09-04",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Gandhi Jayanti",
+      "date": "2026-10-02",
+      "category": "cultural",
+      "kind": "national_day"
+    },
+    {
+      "title": "Dussehra",
+      "date": "2026-10-20",
+      "category": "festivals",
+      "kind": "festival"
+    },
+    {
+      "title": "Diwali (Deepavali)",
+      "date": "2026-11-08",
+      "category": "festivals",
+      "kind": "festival"
+    },
+    {
+      "title": "Guru Nanak Jayanti",
+      "date": "2026-11-24",
+      "category": "religious",
+      "kind": "festival"
+    },
+    {
+      "title": "Christmas Day",
+      "date": "2026-12-25",
+      "category": "festivals",
+      "kind": "festival"
+    }
+  ]
+}

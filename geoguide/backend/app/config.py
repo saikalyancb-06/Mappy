@@ -34,6 +34,8 @@ AUTO_SEED_PACKS = _bool("AUTO_SEED_PACKS", True)
 PS13_DB_PATH = Path(os.getenv("PS13_DB_PATH", str(DATA_DIR / "sources" / "ps13" / "PS-13.db")))
 AUTO_IMPORT_PS13 = _bool("AUTO_IMPORT_PS13", True)
 # Synthetic bootstrap feedback (development/demo only; clearly labelled). Production should set both to false.
+FESTIVAL_CALENDARS_DIR = Path(os.getenv("FESTIVAL_CALENDARS_DIR", str(DATA_DIR / "sources" / "festival_calendars")))
+EVENT_MODERATOR_EMAILS = {email.strip().lower() for email in os.getenv("EVENT_MODERATOR_EMAILS", "").split(",") if email.strip()}
 FEEDBACK_BOOTSTRAP_PATH = Path(os.getenv("FEEDBACK_BOOTSTRAP_PATH", str(DATA_DIR / "sources" / "feedback_bootstrap" / "feedback.jsonl")))
 AUTO_SEED_FEEDBACK = _bool("AUTO_SEED_FEEDBACK", True)
 FEEDBACK_INCLUDE_SYNTHETIC = _bool("FEEDBACK_INCLUDE_SYNTHETIC", True)

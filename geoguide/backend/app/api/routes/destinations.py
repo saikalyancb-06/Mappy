@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.api.common import destination_from_params, geo_for, location_from_params
 from app.db.models import IngestionJob, utcnow
 from app.db.session import SessionLocal
+from app.geo.city import resolve_city
 from app.geo.geo_context import parse_user_location
 from app.geo.geocoding import reverse_geocode, resolve_place, search_destinations
 from app.ingestion.overpass import fetch_and_store
@@ -48,7 +49,13 @@ def describe_location(lat: float, lon: float, accuracy_m: float | None = None, t
     if location is None:
         raise HTTPException(status_code=422, detail={"code": "invalid_location", "message": warnings[0] if warnings else "Invalid location."})
     named, errors = reverse_geocode(location.lat, location.lon)
-    return {"location_status": status, "warnings": warnings, "area": named, "inside_destination_id": location.inside_destination_id, "provider_errors": errors}
+    city, city_errors = resolve_city(lat=location.lat, lon=location.lon)
+    detected = None
+    if city is not None:
+        detected = {"name": city.name, "destination_id": city.destination_id, "region": city.region, "country": city.country, "resolved_by": city.resolved_by}
+        if city.destination_id:
+            detected.update(lat=city.lat, lon=city.lon, kind="destination")
+    return {"location_status": status, "warnings": warnings, "area": named, "city": detected, "inside_destination_id": location.inside_destination_id, "provider_errors": [*errors, *city_errors]}
 
 
 def _run_prefetch(job_id: str, lat: float, lon: float, radius_km: float) -> None:

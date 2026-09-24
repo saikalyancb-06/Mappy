@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, LogOut } from 'lucide-react'
 import { getMyVibes } from '../api'
+import SubmissionsPanel from '../components/SubmissionsPanel'
 import { Chip, SectionTitle } from '../components/ui'
 import { titleCase } from '../format'
 
@@ -40,6 +41,7 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
         {vibes.avoids.length > 0 && <p className="muted-text">You've flagged: {vibes.avoids.map((item) => item.label.toLowerCase()).join(', ')}</p>}
         <p className="muted-text">Based on {vibes.feedback_count} place{vibes.feedback_count === 1 ? '' : 's'} you rated{vibes.status === 'emerging' ? ' — still learning' : ''}.</p>
       </div>)}
+    <SubmissionsPanel />
     <SectionTitle eyebrow="Interests">What you care about</SectionTitle>
     <div className="chip-row wrap">{(config?.interests || []).map((item) => <Chip key={item.id} active={interests.includes(item.id)} onClick={() => toggleInterest(item.id)}>{interests.includes(item.id) && <Check size={14} />}{item.label}</Chip>)}</div>
     <SectionTitle eyebrow="Budget">How much to spend</SectionTitle>
