@@ -15,7 +15,42 @@ export class ApiError extends Error {
   }
 }
 
+// ---- short-lived client cache for read endpoints ----
+// Identical requests in flight are shared, and recent answers are reused, so switching tabs or dates back and
+// forth is instant. Keys include the signed-in user; any write (and new city data) clears the cache.
+const CACHE_TTL_MS = [
+  ['/api/config', 3600000], ['/api/feedback/vocabulary', 3600000], ['/api/context/briefing', 300000],
+  ['/api/context', 60000], ['/api/events', 60000], ['/api/nearby', 30000], ['/api/hotels', 60000],
+  ['/api/places/', 30000], ['/api/search', 30000],
+]
+const cache = new Map()
+const ttlFor = (path) => {
+  if (/^\/api\/destinations(\?|$)/.test(path)) return 300000
+  if (/^\/api\/destinations\/[^/]+\/(places|knowledge)/.test(path)) return 60000
+  const hit = CACHE_TTL_MS.find(([prefix]) => path.startsWith(prefix))
+  return hit ? hit[1] : 0
+}
+export const clearApiCache = () => cache.clear()
+
 const request = async (path, options = {}) => {
+  const method = (options.method || 'GET').toUpperCase()
+  if (method !== 'GET') {
+    if (!['/api/interactions', '/api/ask', '/api/plan/deck', '/api/destinations/ensure'].some((prefix) => path.startsWith(prefix))) cache.clear()
+    return send(path, options)
+  }
+  const ttl = ttlFor(path)
+  if (!ttl) return send(path, options)
+  const key = `${getToken() || ''}|${path}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.at < ttl) return hit.promise
+  const promise = send(path, options)
+  cache.set(key, { at: Date.now(), promise })
+  promise.catch(() => cache.delete(key))  // never cache failures
+  if (cache.size > 300) cache.delete(cache.keys().next().value)
+  return promise
+}
+
+const send = async (path, options = {}) => {
   const token = getToken()
   let response
   try {
@@ -86,7 +121,8 @@ export const getCityStatus = (destinationId) => request(`/api/destinations/${enc
 // ---- screens ----
 export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)
 // City + date context: changing the date re-runs events, weather, season, tips and the briefing.
-export const getCityContext = (context, { date, language = 'en' } = {}) => request(`/api/context${contextParams(context, { date, language })}`)
+export const getCityContext = (context, { date, language = 'en' } = {}) => request(`/api/context${contextParams(context, { date, language, briefing: 'deferred' })}`)
+export const getCityBriefing = (context, { date, language = 'en' } = {}) => request(`/api/context/briefing${contextParams(context, { date, language })}`)
 export const getEvents = (context, { date, when, end, q, category, free, festival, near, radiusKm } = {}) => request(`/api/events${contextParams(context, { date, when, end, q, category, free: free ? 'true' : null, festival: festival ? 'true' : null, near, radius_km: radiusKm })}`)
 export const getEventsOverview = (context, { date, near } = {}) => request(`/api/events/overview${contextParams(context, { date, near })}`)
 
@@ -104,6 +140,7 @@ export const getMyVibes = () => request('/api/me/vibes')
 export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm, text, rankingMode, travelMode, withinBudget } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm, text, ranking_mode: rankingMode, travel_mode: travelMode, within_budget: withinBudget ? 'true' : null })}`)
 export const getHotels = (context, { origin = 'auto', sort = 'best', checkIn, nights, maxPrice, minStars, withinBudget } = {}) => request(`/api/hotels${contextParams(context, { origin, sort, check_in: checkIn, nights, max_price: maxPrice, min_stars: minStars, within_budget: withinBudget ? 'true' : null })}`)
 export const searchPlaces = (context, q, kind = null) => request(`/api/search${contextParams(context, { q, kind })}`)
+export const getSimilarPlaces = (id) => request(`/api/places/${encodeURIComponent(id)}/similar`)
 export const getPlace = (id, context) => request(`/api/places/${encodeURIComponent(id)}${contextParams({ userLocation: context?.userLocation })}`)
 
 export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug, date }) => request('/api/ask', {

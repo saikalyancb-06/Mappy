@@ -41,14 +41,29 @@ def city_context(
     lat: float | None = None, lon: float | None = None, accuracy_m: float | None = None, timestamp: str | None = None,
     destination_id: str | None = None, destination: str | None = None,
     date: str | None = Query(None, alias="date", max_length=10), language: str = "en",
+    briefing: str = Query("full", pattern="^(full|deferred)$"),
     authorization: str | None = Header(default=None),
 ) -> dict:
     city, geo, errors = _city(lat, lon, accuracy_m, timestamp, destination_id, destination)
     selected = _date(date, city)
-    result = build_city_context(city, selected, profile=resolve_profile(authorization), user_point=geo.user_point(), language=language if language in {"en", "kn", "hi"} else "en")
+    result = build_city_context(city, selected, profile=resolve_profile(authorization), user_point=geo.user_point(), language=language if language in {"en", "kn", "hi"} else "en", briefing_mode=briefing)
     result["provider_errors"] = errors + result["provider_errors"]
     result["geo_context"] = geo.as_dict()
     return result
+
+
+@router.get("/context/briefing")
+def city_briefing(
+    lat: float | None = None, lon: float | None = None, accuracy_m: float | None = None, timestamp: str | None = None,
+    destination_id: str | None = None, destination: str | None = None,
+    date: str | None = Query(None, alias="date", max_length=10), language: str = "en",
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """The AI briefing for a city and date (the page itself is served first with a verified-data briefing)."""
+    city, geo, _ = _city(lat, lon, accuracy_m, timestamp, destination_id, destination)
+    selected = _date(date, city)
+    result = build_city_context(city, selected, profile=resolve_profile(authorization), user_point=geo.user_point(), language=language if language in {"en", "kn", "hi"} else "en")
+    return {"briefing": result["briefing"], "date": result["date"]}
 
 
 @router.get("/events")

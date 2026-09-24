@@ -16,6 +16,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from app.core.dates import DateRange
+from app.core.concurrency import map_parallel
 from app.core.rules import load_rules
 from app.core.text import normalize, tokens
 from app.events.model import EventQuery, NormalisedEvent, day_bounds, zone
@@ -65,6 +66,13 @@ def build_query(city: City, window: DateRange, *, mode: str = "destination", use
 
 
 LOCAL_PROVIDERS = {"stored", "calendar"}
+
+
+def _collect(run: Any, provider: EventProvider) -> list[ProviderResult]:
+    """Run one provider through ``run`` into its own list (thread-safe fan-out)."""
+    own: list[ProviderResult] = []
+    run(provider, own)
+    return own
 
 
 def default_providers(web: SerpApiClient | None = None) -> list[EventProvider]:
@@ -156,7 +164,7 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
     providers = providers if providers is not None else default_providers(web)
     results: list[ProviderResult] = []
 
-    def run(provider: EventProvider) -> None:
+    def run(provider: EventProvider, results: list[ProviderResult] = results) -> None:
         if not provider.covers(query):
             note = load_rules("events").get("provider_coverage", {}).get(provider.name, {}).get("skip_note", "{country}: not covered; skipped.")
             results.append(ProviderResult(provider.name, provider.label, status="not_applicable", error={"source": provider.name, "code": "no_coverage", "message": note.format(country=query.city.country or country_code(query.city) or "this country")}))
@@ -171,9 +179,10 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
             results.append(ProviderResult(provider.name, provider.label, status="error", error={"source": provider.name, "code": "provider_failure", "message": "The provider failed unexpectedly."}))
 
     structured = [p for p in providers if p.name != "web" and (query.include_live or p.local)]
-    for provider in structured:
-        run(provider)
-    fallback = [p for p in providers if p.name == "web"]
+    # Providers are independent: query them at the same time (results keep provider order).
+    for batch in map_parallel(lambda provider: _collect(run, provider), structured):
+        results.extend(batch)
+    fallback = [p for p in providers if p.name == "web"]  # runs after, only when needed
     matching = sum(1 for r in results for e in r.events if _wanted(e, query))
     if query.include_live and fallback and (matching < WEB_FALLBACK_BELOW or query.festival_only):
         run(fallback[0])

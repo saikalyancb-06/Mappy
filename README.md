@@ -98,6 +98,16 @@ Selecting a city is the moment GeoGuide builds its knowledge of that city. See *
 * **Database first.** Once prepared, questions about places and the city are answered from the database. Live Maps search runs only when the city isn't ready, coverage is thin or a place is unknown, and reusable finds are stored. Events, weather and "open now" stay live.
 * **Neutral recommendation policy.** One deterministic gate keeps permanently closed places out of suggestions. Deployments can list categories to exclude, and travellers can leave places of worship of every faith out of suggestions.
 
+## Speed
+
+Independent provider calls run in parallel, connections are pooled, responses are gzipped, the Explore page doesn't wait for the AI briefing, and the app caches recent reads. The cold Explore load dropped from 6.5 s to 2.5 s with realistic provider latency, and the question-parsing CPU is about 5× lower. See **[docs/performance.md](docs/performance.md)**.
+
+## Trip tools
+
+* **Plan export:** "Add to calendar" downloads the day as an `.ics` file in the destination's timezone. "Route in Maps" opens every stop as a Google Maps route, and "Share" uses the phone's share sheet.
+* **More like this:** each place shows similar places nearby (same category or kind, shared vibes, rating, distance). The recommendation policy applies.
+* **Saved places:** Profile lists what you saved; these are also the plan's must-sees.
+
 ## Feedback, vibes and events
 
 See **[docs/feedback-and-events.md](docs/feedback-and-events.md)** for the data model, formulas, providers and example API requests and responses. In short:

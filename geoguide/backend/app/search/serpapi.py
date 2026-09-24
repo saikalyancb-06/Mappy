@@ -18,6 +18,7 @@ import httpx
 
 from app.config import CACHE_TTL_WEB_S, SERPAPI_KEY, SERPAPI_TIMEOUT_SECONDS, SERPAPI_URL
 from app.core.cache import cache_get, cache_set
+from app.core.http import shared_client
 
 logger = logging.getLogger(__name__)
 ENGINES = {"google", "google_maps", "google_news", "google_events", "google_hotels"}
@@ -156,8 +157,7 @@ class SerpApiClient:
     def _fetch(self, params: dict[str, Any]) -> dict[str, Any]:
         """One HTTP call to SerpApi with provider errors mapped to SearchProviderError (the key stays server-side)."""
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(SERPAPI_URL, params=params)
+            response = shared_client().get(SERPAPI_URL, params=params, timeout=self.timeout)
             if response.status_code == 429:
                 raise SearchProviderError("rate_limited", "Web search rate limit reached.", retryable=True)
             if response.status_code in (401, 403):

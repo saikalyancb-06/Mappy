@@ -15,10 +15,12 @@ from __future__ import annotations
 import json
 import logging
 import math
+import threading
+import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import event, func, select
 
 from app.config import CACHE_TTL_GEOCODE_S, NOMINATIM_URL
 from app.core.cache import cache_get, cache_set
@@ -284,17 +286,55 @@ def resolve_place(name: str, near: tuple[float, float] | None = None, allow_remo
     ), errors
 
 
-def nearest_destination(lat: float, lon: float) -> Destination | None:
-    """The stored city the point lies in (within its city extent), if any; the closest relative to size wins."""
+_INDEX_TTL_S = 120.0
+_index: tuple[float, list[tuple[str, float, float, float]]] | None = None
+_index_lock = threading.Lock()
+
+
+def invalidate_destination_index() -> None:
+    """Forget the cached city positions (call after a city is created or its boundary changes)."""
+    global _index
+    with _index_lock:
+        _index = None
+
+
+def _destination_index() -> list[tuple[str, float, float, float]]:
+    """(id, lat, lon, extent km) for every stored city, cached briefly: this runs several times per request."""
+    global _index
+    now = time.monotonic()
+    current = _index
+    if current is not None and now - current[0] < _INDEX_TTL_S:
+        return current[1]
     with SessionLocal() as db:
         destinations = db.scalars(select(Destination)).all()
+    rows = [(d.id, d.lat, d.lon, city_extent_km(d)) for d in destinations]
+    with _index_lock:
+        _index = (now, rows)
+    return rows
+
+
+def nearest_destination(lat: float, lon: float, _retry: bool = False) -> Destination | None:
+    """The stored city the point lies in (within its city extent), if any; the closest relative to size wins."""
     containing = []
-    for destination in destinations:
-        extent = city_extent_km(destination)
-        distance = haversine_km(lat, lon, destination.lat, destination.lon)
-        if extent > 0 and distance <= extent:
-            containing.append((distance / extent, destination))
-    return min(containing, key=lambda item: item[0])[1] if containing else None
+    for destination_id, d_lat, d_lon, extent in _destination_index():
+        if extent <= 0:
+            continue
+        distance = haversine_km(lat, lon, d_lat, d_lon)
+        if distance <= extent:
+            containing.append((distance / extent, destination_id))
+    if not containing:
+        return None
+    best = min(containing)[1]
+    with SessionLocal() as db:
+        found = db.get(Destination, best)
+    if found is None and not _retry:  # removed since the index was built (bulk delete): rebuild once
+        invalidate_destination_index()
+        return nearest_destination(lat, lon, _retry=True)
+    return found
+
+
+for _event in ("after_insert", "after_update", "after_delete"):
+    event.listen(Destination, _event, lambda *args: invalidate_destination_index())
 
 
 def reverse_geocode(lat: float, lon: float) -> tuple[dict[str, Any] | None, list[dict[str, str]]]:
@@ -323,7 +363,7 @@ def search_destinations(query: str | None, limit: int = 10, near: tuple[float, f
     target = normalize(query or "")
     with SessionLocal() as db:
         destinations = db.scalars(select(Destination)).all()
-        poi_counts = {d.id: db.query(Poi).filter(Poi.destination_id == d.id).count() for d in destinations}
+        poi_counts = dict(db.execute(select(Poi.destination_id, func.count()).where(Poi.destination_id.is_not(None)).group_by(Poi.destination_id)).all())
     rows = []
     for destination in destinations:
         names = [destination.name, *destination_aliases(destination)]

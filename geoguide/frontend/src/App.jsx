@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
-import { describeLocation, ensureCity, getCityStatus, getConfig, getCurrentUser, getHealth, getPreferences, getToken, logIn, logOut, recordInteraction, signUp, updatePreferences } from './api'
+import { clearApiCache, describeLocation, ensureCity, getCityStatus, getConfig, getCurrentUser, getHealth, getPreferences, getToken, logIn, logOut, recordInteraction, signUp, updatePreferences } from './api'
 import ContextBar from './components/ContextBar'
 import { BottomTabBar, Chip, StateMessage } from './components/ui'
 import { useDeviceLocation } from './hooks/useDeviceLocation'
-import AskView from './views/AskView'
-import NearbyView from './views/NearbyView'
 import ExploreView from './views/ExploreView'
-import PlaceDetailView from './views/PlaceDetailView'
-import PlanView from './views/PlanView'
-import ProfileView from './views/ProfileView'
 import StartView from './views/StartView'
 import './App.css'
+
+// Screens other than Explore load on first use, so the first paint ships less JavaScript.
+const AskView = lazy(() => import('./views/AskView'))
+const NearbyView = lazy(() => import('./views/NearbyView'))
+const PlaceDetailView = lazy(() => import('./views/PlaceDetailView'))
+const PlanView = lazy(() => import('./views/PlanView'))
+const ProfileView = lazy(() => import('./views/ProfileView'))
+// …and are fetched in the background once the first screen is up, so the first tap on a tab is instant.
+const warmScreens = () => Promise.all([import('./views/AskView'), import('./views/NearbyView'), import('./views/PlaceDetailView'), import('./views/PlanView'), import('./views/ProfileView')]).catch(() => {})
 
 const DESTINATION_KEY = 'geoguide-destination'
 const SAVED_KEY = 'geoguide-saved'
@@ -89,6 +93,12 @@ function App() {
   const device = useDeviceLocation()
   const [stableLocation, setStableLocation] = useState(device.location)
 
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 1500))
+    const handle = idle(warmScreens)
+    return () => (window.cancelIdleCallback ? window.cancelIdleCallback(handle) : window.clearTimeout(handle))
+  }, [])
+
   // Session + configuration
   useEffect(() => {
     getConfig().then(setConfig).catch((error) => setConfigError(error.message))
@@ -134,7 +144,7 @@ function App() {
     const timer = window.setInterval(() => {
       getCityStatus(preparing.destination_id).then((result) => {
         const next = { destination_id: preparing.destination_id, status: result.status.status, progress: result.status.progress, components: result.status.components, places: result.status.place_count }
-        if (next.places !== preparing.places || !['QUEUED', 'ENRICHING'].includes(next.status)) setDataVersion((v) => v + 1)
+        if (next.places !== preparing.places || !['QUEUED', 'ENRICHING'].includes(next.status)) { clearApiCache(); setDataVersion((v) => v + 1) }
         setPreparing(next)
       }).catch(() => setPreparing(null))
     }, 2000)
@@ -245,16 +255,16 @@ function App() {
     nearby: <NearbyView context={context} config={config} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onEnableLocation={device.start} onChooseDestination={chooseDestination} hasBudget={Boolean(preferences.max_daily_budget)} />,
     plan: <PlanView context={context} config={config} savedIds={savedIds} onToggleSaved={toggleSaved} onOpen={openPlace} onEnableLocation={device.start} profile={preferences} />,
     ask: <AskView context={context} selectedDate={selectedDate} onClearDate={() => setSelectedDate(null)} language={preferences.language} selectedPlace={askPlace} onClearSelected={() => setAskPlace(null)} onAdoptDestination={chooseDestination} onOpen={openPlace} debugAvailable={debugAvailable} />,
-    profile: <ProfileView key={JSON.stringify(preferences)} user={user} config={config} preferences={preferences} onSave={savePreferences} onLogout={logout} />,
+    profile: <ProfileView key={JSON.stringify(preferences)} user={user} config={config} preferences={preferences} onSave={savePreferences} onLogout={logout} savedIds={savedIds} onToggleSaved={toggleSaved} onOpen={openPlace} />,
   }
 
   return <div className="app-frame">
     <main className={`app-scroll ${selectedPlace ? 'detail-scroll' : ''}`}>
       {!selectedPlace && <ContextBar destination={destination} device={device} here={stableLocation ? here : null} onExploreHere={() => here?.destination_id && chooseDestination(here)} onChangeDestination={() => setChoosingStart(true)} onClearDestination={clearDestination} onEnableLocation={device.start} />}
       {preparing && ['QUEUED', 'ENRICHING'].includes(preparing.status) && preparing.destination_id === destination?.destination_id && !selectedPlace && <section className="ingestion-card"><div className="verified-row"><span className="verified-dot" /> Preparing your {destination?.name} guide… <strong>{preparing.progress || 0}%</strong></div><div className="progress-track"><span style={{ width: `${Math.max(5, preparing.progress || 0)}%` }} /></div><p>{Object.entries(preparing.components || {}).filter(([, c]) => ['done', 'empty'].includes(c.status)).map(([name]) => name).join(' · ') || 'Collecting famous places, history and local knowledge.'}{preparing.places ? ` · ${preparing.places} places so far` : ''}. You can start exploring now; answers get richer as it fills in.</p></section>}
-      {selectedPlace
-        ? <PlaceDetailView place={selectedPlace} context={context} saved={savedIds.includes(selectedPlace.id)} onSave={toggleSaved} onBack={() => setSelectedPlace(null)} onAsk={(place) => { setAskPlace(place); setSelectedPlace(null); setActiveTab('ask') }} />
-        : views[activeTab]}
+      <Suspense fallback={<div className="skeleton-card" />}>{selectedPlace
+        ? <PlaceDetailView key={selectedPlace.id} place={selectedPlace} context={context} onOpen={openPlace} saved={savedIds.includes(selectedPlace.id)} onSave={toggleSaved} onBack={() => setSelectedPlace(null)} onAsk={(place) => { setAskPlace(place); setSelectedPlace(null); setActiveTab('ask') }} />
+        : views[activeTab]}</Suspense>
     </main>
     {!selectedPlace && <BottomTabBar activeTab={activeTab} onChange={setActiveTab} />}
   </div>

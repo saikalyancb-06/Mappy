@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.core.rules import load_rules, taxonomy
-from app.core.text import normalize
+from app.core.text import has_phrase, normalize
 
 _CURRENCY_WORDS = {"₹": "INR", "rs": "INR", "rs.": "INR", "inr": "INR", "rupees": "INR", "$": "USD", "usd": "USD", "€": "EUR", "eur": "EUR", "£": "GBP", "aed": "AED"}
 _MONEY = re.compile(r"(?P<pre>₹|rs\.?|inr|\$|€|£|aed)\s*(?P<amt>\d[\d,]*(?:\.\d{1,2})?)|(?P<amt2>\d[\d,]*(?:\.\d{1,2})?)\s*(?P<post>rupees|rs\.?|inr|usd|eur|aed)\b", re.IGNORECASE)
@@ -75,7 +75,7 @@ class Constraints:
 def _has(norm: str, phrases: list[str]) -> str | None:
     for phrase in sorted(phrases, key=len, reverse=True):
         target = normalize(phrase)
-        if target and re.search(rf"(?:^|\s){re.escape(target)}(?:\s|$)", norm):
+        if target and has_phrase(norm, target):
             return phrase
     return None
 

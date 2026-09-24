@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from difflib import SequenceMatcher
+from functools import lru_cache
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 # Words that describe *what* a place is rather than *which* place it is.
@@ -17,7 +18,13 @@ GENERIC_PLACE_WORDS = {
 def normalize(text: str | None) -> str:
     if not text:
         return ""
-    decomposed = unicodedata.normalize("NFKD", str(text))
+    return _normalize(str(text))
+
+
+@lru_cache(maxsize=32768)
+def _normalize(text: str) -> str:
+    # Pure and called thousands of times per request (vocabulary phrases, names): cached.
+    decomposed = unicodedata.normalize("NFKD", text)
     ascii_text = "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
     ascii_text = ascii_text.replace("&", " and ").replace("'", "")
     return " ".join(_TOKEN.findall(ascii_text))
@@ -53,3 +60,15 @@ def name_similarity(a: str | None, b: str | None) -> float:
     # is strong evidence, but less than an exact match.
     contained = 0.9 * containment if containment == 1.0 else 0.0
     return max(sequence, jaccard, contained)
+
+
+def has_phrase(norm: str, phrase: str) -> bool:
+    """Whole-word phrase test on normalised text (equivalent to ``(?:^|\\s)phrase(?:\\s|$)``, without regex)."""
+    target = normalize(phrase)
+    return bool(target) and f" {target} " in f" {norm} "
+
+
+@lru_cache(maxsize=4096)
+def word_pattern(phrase: str, flags: int = 0) -> re.Pattern[str]:
+    """A compiled whole-word pattern for a phrase (cached, so hot loops never recompile)."""
+    return re.compile(rf"\b{re.escape(phrase)}\b", flags)

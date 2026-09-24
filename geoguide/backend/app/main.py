@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.routes import ask, auth, cities, context, destinations, feedback, places, plan, system, submissions
 from app.config import APP_ENV, APP_HOST, APP_PORT, AUTO_IMPORT_PS13, AUTO_SEED_FEEDBACK, AUTO_SEED_PACKS, CORS_ORIGINS
@@ -33,6 +34,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="GeoGuide API", version="0.2.0", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)  # JSON payloads shrink ~5-8x
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=CORS_ORIGINS != ["*"], allow_methods=["*"], allow_headers=["*"])
 for module in (system, auth, places, ask, plan, destinations, cities, context, feedback, submissions):
     app.include_router(module.router)

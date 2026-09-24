@@ -274,6 +274,7 @@ def build_plan(
     )
     plan = _optimise_covering(request, coverage, items, all_candidates, weather, start_time, int(duration_min))
     plan["destination_id"] = reference.destination_id
+    plan["timezone"] = tz  # IANA zone of the plan's start time (for calendar export)
     plan["weather_signals"] = weather.get("signals") or []
     plan["wishes"] = wishes
     plan["replanned"] = replan is not None

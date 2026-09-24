@@ -221,6 +221,7 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "poi_id": candidate.id,
             "name": candidate.name,
             "category": candidate.category,
+            "address": candidate.address,
             "lat": candidate.lat,
             "lon": candidate.lon,
             "arrive": stop["arrive"].strftime("%H:%M"),
