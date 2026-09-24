@@ -7,7 +7,8 @@ validation → structured response with sources, context and a trace.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+import re
+from datetime import date, timedelta
 from typing import Any
 
 from app.core.logging import Trace
@@ -17,7 +18,10 @@ from app.geo.geo_context import GeoContext, build_geo_context, destination_by_id
 from app.geo.geocoding import destination_to_place, resolve_place
 from app.geo.spatial import get_pois
 from app.entities.resolver import resolve_entity
-from app.knowledge.context import SERIOUS, active_advisories, events_for, weather_notices, web_events
+from app.knowledge.context import SERIOUS, active_advisories, events_for, weather_notices
+from app.core.dates import parse_range, single
+from app.events.service import city_events
+from app.geo.city import City, city_from_geo, city_from_place, resolve_city
 from app.llm.evidence import EvidenceBuilder
 from app.llm.generator import generate
 from app.llm.prompts import AnswerContext
@@ -32,7 +36,7 @@ from app.search.serpapi import SearchProviderError, client as serp_client
 from app.ranking.ranker import RankRequest, rank
 from app.services.discovery import DiscoveryRequest, discover
 from app.services.route_suggestions import RouteRequest, route_suggestions
-from app.weather.open_meteo import get_weather, local_now
+from app.weather.open_meteo import get_weather, local_now, weather_on
 
 ATTRACTION_KINDS = set(taxonomy()["attraction_kinds"])
 
@@ -46,6 +50,7 @@ class AskRequest:
     profile: dict[str, Any] = field(default_factory=dict)
     language: str = "en"
     debug: bool = False
+    selected_date: str | None = None  # the date the traveller is looking at (Explore date picker), ISO
 
 
 def _reference_timezone(geo: GeoContext, weather: dict[str, Any] | None = None) -> str | None:
@@ -146,7 +151,9 @@ class QueryService:
             return
         reference = state.geo.reference
         state.trace.start_timer("weather")
-        weather = get_weather(reference.lat, reference.lon, _day_offset(state.intent))
+        target = self._weather_day(state)
+        destination = destination_by_id(reference.destination_id)
+        weather = weather_on(reference.lat, reference.lon, target, timezone_name=_reference_timezone(state.geo), destination_id=destination.id if destination else None) if target else get_weather(reference.lat, reference.lon, _day_offset(state.intent))
         state.trace.stop_timer("weather")
         state.weather = weather
         label = reference.label
@@ -156,6 +163,17 @@ class QueryService:
             return
         state.evidence.add_weather(weather, label)
         state.extra["lead"] = f"Weather for {label}:"
+
+    def _weather_day(self, state: "_State") -> date | None:
+        """A specific date for weather questions: a date in the question, or the selected date (+ "tomorrow")."""
+        today = local_now(_reference_timezone(state.geo)).date()
+        anchor = self._anchor(state, None) if state.request.selected_date else today
+        window = parse_range(state.intent.raw_query, anchor)
+        if window and window.start == window.end:
+            return window.start
+        if state.request.selected_date:
+            return anchor + timedelta(days=_day_offset(state.intent))
+        return None
 
     def _safety(self, state: "_State") -> None:
         if not self._require_reference(state):
@@ -453,24 +471,51 @@ class QueryService:
         state.candidates = [by_id[s["poi_id"]] for s in stops if s["poi_id"] in by_id]
         state.extra["lead"] = f"Here's a {plan['used_min']}-minute plan starting {plan['start']} from {plan['start_label']}:"
 
+    def _city(self, state: "_State") -> City | None:
+        """The city a question is about: a named place, else "here" (GPS), else the chosen city, else GPS."""
+        geo = state.geo
+        here = bool(re.search(r"\b(?:here|around me|near me|nearby|where i am)\b", state.intent.raw_query, re.IGNORECASE))
+        if geo.query_destination is not None:
+            city, errors = city_from_place(geo.query_destination), []
+        elif here and geo.user_location is not None:
+            city, errors = resolve_city(lat=geo.user_location.lat, lon=geo.user_location.lon)
+        else:
+            city, errors = city_from_geo(geo)
+        state.errors.extend(errors)
+        return city
+
+    def _anchor(self, state: "_State", city: City | None) -> date:
+        """The selected date (from the Explore date picker), or the city's local today."""
+        if state.request.selected_date:
+            try:
+                return date.fromisoformat(state.request.selected_date[:10])
+            except ValueError:
+                pass
+        return local_now(city.timezone if city else _reference_timezone(state.geo)).date()
+
     def _events(self, state: "_State") -> None:
-        if not self._require_reference(state):
+        city = self._city(state)
+        if city is None:
+            state.needs = "city"
+            state.extra["empty_message"] = "Tell me which city, or turn on your location, and I'll list what's happening there."
             return
-        reference = state.geo.reference
-        day = local_now(_reference_timezone(state.geo)).date()
-        events = events_for(reference.destination_id, day, days=14)
-        state.events = events
-        for event in events[:5]:
+        anchor = self._anchor(state, city)
+        window = parse_range(state.intent.raw_query, anchor) or single(anchor)
+        result = city_events(city, window, today=local_now(city.timezone).date(), user_point=state.geo.user_point(), web=serp_client)
+        state.errors.extend(s["error"] for s in result["sources_checked"] if s.get("error"))
+        wanted = {c for c in (state.intent.constraints.include_categories if state.intent.constraints else [])}
+        state.events = result["events"]
+        state.event_listing = result
+        state.evidence.add_event_status(city.name, window.label, len(result["events"]), [s["source"] for s in result["sources_checked"] if s.get("status") in {"ok", None}])
+        for event in result["events"][:8]:
             state.evidence.add_event(event)
-        items, error = web_events(reference.label)
-        if error and error.get("code") != "web_search_unavailable":
-            state.errors.append(error)
-        for item in items[:4]:
-            state.evidence.add_web(item)
-        if not serp_client.configured:
-            state.extra.setdefault("closing_notes", []).append("Live event search is not configured, so only recurring events in the stored data are listed; confirm dates locally.")
-        if not state.evidence.items:
-            state.extra["empty_message"] = f"I have no verified events for {reference.label} in the coming days."
+        for festival in result["associated_festivals"][:2]:
+            state.evidence.add_event(festival)
+        state.extra["lead"] = f"What's happening in {city.name} ({window.label}):"
+        state.extra["empty_message"] = result["message"]
+        state.extra["no_events_message"] = result["message"]
+        state.extra["city"] = city.as_dict()
+        state.trace.step("events", city=city.key, start=window.start.isoformat(), end=window.end.isoformat(), found=len(result["events"]), wanted=sorted(wanted))
 
     def _web(self, state: "_State") -> None:
         label = state.geo.reference.label if state.geo.reference else ""
@@ -534,6 +579,8 @@ class QueryService:
             "weather": state.weather,
             "safety": state.safety,
             "events": state.events,
+            "event_listing": {k: v for k, v in state.event_listing.items() if k != "events"} if state.event_listing else None,
+            "selected_date": state.request.selected_date,
             "plan": {k: v for k, v in state.plan.items() if not k.startswith("_")} if state.plan else None,
             "route": state.route,
             "comparison": state.comparison,
@@ -583,6 +630,7 @@ class _State:
     weather: dict[str, Any] | None = None
     safety: list[dict[str, Any]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
+    event_listing: dict[str, Any] | None = None
     web: list[dict[str, Any]] = field(default_factory=list)
     plan: dict[str, Any] | None = None
     route: dict[str, Any] | None = None

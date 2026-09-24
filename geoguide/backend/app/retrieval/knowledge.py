@@ -71,9 +71,10 @@ def retrieve(
     kinds: Iterable[str] | None = None,
     limit: int = 6,
     embedder: EmbeddingProvider | None = None,
+    categories: Iterable[str] | None = None,
 ) -> KnowledgeResult:
     embedder = embedder or default_provider
-    flt = ChunkFilter(destination_id=destination_id, poi_ids=list(poi_ids or []) or None, kinds=list(kinds or []) or None)
+    flt = ChunkFilter(destination_id=destination_id, poi_ids=list(poi_ids or []) or None, kinds=list(kinds or []) or None, categories=list(categories or []) or None)
     with SessionLocal() as db:
         statement = vector_store._apply_filter(select(KnowledgeChunk), flt)
         chunks = {chunk.id: chunk for chunk in db.scalars(statement).all()}

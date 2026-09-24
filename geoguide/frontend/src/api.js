@@ -77,12 +77,15 @@ export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/
 
 // ---- screens ----
 export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)
+// City + date context: changing the date re-runs events, weather, season, tips and the briefing.
+export const getCityContext = (context, { date, language = 'en' } = {}) => request(`/api/context${contextParams(context, { date, language })}`)
+export const getEvents = (context, { date, when, end } = {}) => request(`/api/events${contextParams(context, { date, when, end })}`)
 export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm, text, rankingMode, travelMode, withinBudget } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm, text, ranking_mode: rankingMode, travel_mode: travelMode, within_budget: withinBudget ? 'true' : null })}`)
 export const getHotels = (context, { origin = 'auto', sort = 'best', checkIn, nights, maxPrice, minStars, withinBudget } = {}) => request(`/api/hotels${contextParams(context, { origin, sort, check_in: checkIn, nights, max_price: maxPrice, min_stars: minStars, within_budget: withinBudget ? 'true' : null })}`)
 export const searchPlaces = (context, q, kind = null) => request(`/api/search${contextParams(context, { q, kind })}`)
 export const getPlace = (id, context) => request(`/api/places/${encodeURIComponent(id)}${contextParams({ userLocation: context?.userLocation })}`)
 
-export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug }) => request('/api/ask', {
+export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug, date }) => request('/api/ask', {
   method: 'POST',
   body: JSON.stringify({
     question,
@@ -91,6 +94,7 @@ export const askGeoGuide = ({ question, context, selectedPlaceId, language, debu
     selected_place_id: selectedPlaceId || null,
     language,
     debug: Boolean(debug),
+    date: date || null,
   }),
 })
 

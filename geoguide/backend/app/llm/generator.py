@@ -42,8 +42,17 @@ def deterministic_answer(context: AnswerContext) -> str:
     lead = context.extra.get("lead")
     if lead:
         lines.append(lead)
+    knowledge = by_type.get("knowledge", [])
+    if context.intent == "BRIEFING" and knowledge:
+        lines.append(f"{_first_sentence(knowledge[0].content, 320)} [{knowledge[0].id}]")
+    for item in by_type.get("event_status", []):
+        if item.metadata.get("count") == 0:
+            lines.append(f"{context.extra.get('no_events_message') or 'No verified events are listed for this date in the sources checked.'} [{item.id}]")
+    if context.intent == "BRIEFING":
+        for item in by_type.pop("event", [])[:3]:
+            lines.append(f"- {item.content} [{item.id}]")
     weather = by_type.get("weather", [])
-    if weather and context.intent in {"WEATHER", "ITINERARY", "ACTIVITY_DISCOVERY", "SAFETY"}:
+    if weather and context.intent in {"WEATHER", "ITINERARY", "ACTIVITY_DISCOVERY", "SAFETY", "BRIEFING", "EVENTS"}:
         lines.append(f"{weather[0].content} [{weather[0].id}]")
     pois = by_type.get("poi", [])
     if pois:
@@ -52,7 +61,6 @@ def deterministic_answer(context: AnswerContext) -> str:
                 details = [part.strip() for part in item.content.split(";")[1:]]
                 keep = [d for d in details if d.startswith(("distance", "currently", "entry", "typical visit", "rating", "area"))][:4]
                 lines.append(f"- **{item.title}** — {', '.join(keep) if keep else _first_sentence(item.content)} [{item.id}]")
-    knowledge = by_type.get("knowledge", [])
     if knowledge and context.intent in {"DESTINATION_KNOWLEDGE", "PLACE_LOOKUP", "GENERAL_TRAVEL_QUESTION", "ACTIVITY_DISCOVERY"}:
         limit = 3 if context.intent in {"DESTINATION_KNOWLEDGE", "GENERAL_TRAVEL_QUESTION", "PLACE_LOOKUP"} else 1
         for item in knowledge[:limit]:

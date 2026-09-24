@@ -21,6 +21,7 @@ from sqlalchemy import delete
 
 from app.config import PACKS_DIR
 from app.core.text import normalize
+from app.events.store import classify as classify_event
 from app.db.models import DataSource, Destination, EntityAlias, EventFestival, KnowledgeChunk, Poi, SafetyAdvisory, utcnow
 from app.db.session import SessionLocal, init_db
 from app.geo.distance import valid_coordinates
@@ -178,7 +179,15 @@ def load_pack(pack_dir: Path) -> dict[str, int]:
             counts["advisories"] += 1
 
         for item in _read(pack_dir / "events.json") or []:
-            db.merge(EventFestival(id=item["id"], destination_id=item.get("destination_id") or destination_id, title=item["title"], summary=item.get("summary"), start_date=item.get("start_date"), end_date=item.get("end_date"), typical_months=_json_or_none(item.get("typical_months")), recurrence=item.get("recurrence"), source=item.get("source") or default_source, source_url=item.get("source_url"), data_source_id=source_id, confidence=item.get("confidence"), updated_at=utcnow()))
+            event_type, event_category = classify_event(item["title"], item.get("summary"), recurring=bool(item.get("typical_months") or "annual" in (item.get("recurrence") or "")))
+            db.merge(EventFestival(
+                id=item["id"], destination_id=item.get("destination_id") or destination_id, title=item["title"], summary=item.get("summary"),
+                start_date=item.get("start_date"), end_date=item.get("end_date"), typical_months=_json_or_none(item.get("typical_months")), recurrence=item.get("recurrence"),
+                source=item.get("source") or default_source, source_url=item.get("source_url"), data_source_id=source_id, confidence=item.get("confidence"), updated_at=utcnow(),
+                event_type=item.get("type") or event_type, category=item.get("category") or event_category, venue_name=item.get("venue_name"),
+                venue_lat=item.get("venue_lat"), venue_lon=item.get("venue_lon"), significance=item.get("significance"), traditions=item.get("traditions"),
+                etiquette=item.get("etiquette"), season=item.get("season"), status=item.get("status") or "active", last_verified_at=item.get("last_verified_at") or meta.get("collected_at"),
+            ))
             counts["events"] += 1
         db.commit()
     logger.info("pack_loaded pack=%s counts=%s", pack_dir.name, counts)

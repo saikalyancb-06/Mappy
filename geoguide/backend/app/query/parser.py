@@ -200,6 +200,16 @@ def _entity(text: str) -> tuple[str | None, bool]:
     return None, False
 
 
+def _is_date_phrase(phrase: str) -> bool:
+    """'October', 'Oct 22', '22 October 2026' are dates, not places."""
+    from datetime import date
+
+    from app.core.dates import MONTHS, parse_day
+
+    words = normalize(phrase).split()
+    return bool(words) and (words[0] in MONTHS and (len(words) == 1 or words[1].isdigit()) or parse_day(phrase, date.today()) is not None)
+
+
 def _place_mentions(text: str) -> tuple[str | None, str | None, bool]:
     """Return (place mention, relation, near_me) from prepositional phrases."""
     rules = load_rules("intents")
@@ -220,7 +230,7 @@ def _place_mentions(text: str) -> tuple[str | None, str | None, bool]:
             near_me = True
             continue
         phrase = _clean_mention(raw_phrase)
-        if not phrase:
+        if not phrase or _is_date_phrase(phrase):
             continue
         if _is_self_reference(phrase) or normalize(phrase) in {"me", "us"}:
             near_me = True

@@ -55,6 +55,9 @@ EMBEDDINGS_ENABLED = _bool("EMBEDDINGS_ENABLED", True)
 # External providers
 NOMINATIM_URL = os.getenv("NOMINATIM_URL", "https://nominatim.openstreetmap.org")
 OPEN_METEO_URL = os.getenv("OPEN_METEO_URL", "https://api.open-meteo.com/v1/forecast")
+OPEN_METEO_ARCHIVE_URL = os.getenv("OPEN_METEO_ARCHIVE_URL", "https://archive-api.open-meteo.com/v1/archive")
+TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "")
+TICKETMASTER_URL = os.getenv("TICKETMASTER_URL", "https://app.ticketmaster.com/discovery/v2/events.json")
 OVERPASS_URL = os.getenv("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
 HTTP_USER_AGENT = os.getenv("HTTP_USER_AGENT", "GeoGuide/0.2 (location-aware travel companion)")
 

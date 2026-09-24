@@ -1,0 +1,31 @@
+{
+  "_comment": "City-and-date context engine. RAG domains are metadata filters (knowledge sections) applied before ranking; tips are rules over retrieved data, each carrying the fact it rests on.",
+  "rag_domains": {
+    "place": {"categories": ["overview", "history", "architecture", "orientation", "practical", "food", "transport"], "query": "overview history significance what makes this place special"},
+    "culture": {"categories": ["culture", "etiquette", "seasonal", "safety"], "query": "local customs etiquette culture traditions dress"},
+    "events": {"categories": ["seasonal", "culture"], "query": "festival celebration season events"}
+  },
+  "about_sections": ["overview", "history", "architecture", "orientation"],
+  "culture_sections": ["culture", "etiquette", "seasonal"],
+  "attractions_limit": 6,
+  "tips": {
+    "rain_probability": 50,
+    "rain_mm": 5,
+    "heat_apparent_c": 35,
+    "cool_min_c": 14,
+    "uv_high": 8,
+    "mild_max_c": [18, 32],
+    "text": {
+      "rain": "Carry an umbrella or a light rain jacket; showers are likely ({detail}).",
+      "heat": "Plan open-air sightseeing for early morning or late afternoon and carry water (feels like up to {apparent}°C).",
+      "uv": "UV is very high ({uv}); use sunscreen, a hat and sunglasses.",
+      "cool": "It gets cool (down to {min}°C); pack a warm layer for mornings and evenings.",
+      "mild": "Light, breathable clothing suits the day ({min}–{max}°C).",
+      "crowd": "{event} is on ({dates}); expect crowds and traffic around it and allow extra travel time.",
+      "ticketed": "{event} is ticketed{price}; book ahead.",
+      "peak": "It's peak tourist season here; book stays and popular sites in advance.",
+      "off_peak": "It's outside peak season, so expect fewer crowds.",
+      "advisory": "{title}: {body}"
+    }
+  }
+}

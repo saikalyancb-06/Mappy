@@ -55,7 +55,9 @@ class SearchResult:
     place_id: str | None = None
     latitude: float | None = None
     longitude: float | None = None
-    event_date: str | None = None
+    event_date: str | None = None  # the provider's display text, e.g. "Thu, Oct 22, 7 – 10 PM"
+    event_start: str | None = None  # the provider's start day, e.g. "Oct 22"
+    venue_name: str | None = None
     price_per_night: str | None = None  # exact decimal text from the provider's extracted rate
     price_currency: str | None = None
     hotel_class: int | None = None
@@ -116,6 +118,8 @@ class SerpApiClient:
                 params["ll"] = f"@{lat:.6f},{lon:.6f},{zoom}z"  # without it the query text carries the locality
         elif engine == "google_hotels":
             params.update({k: v for k, v in (extra or {}).items() if k in {"check_in_date", "check_out_date", "currency", "gl", "adults", "sort_by", "max_price"} and v is not None})
+        elif engine == "google_events":
+            params.update({k: v for k, v in (extra or {}).items() if k in {"htichips", "gl", "location"} and v})
         elif engine == "google":
             params["num"] = min(max(limit, 1), 20)
             if freshness:
@@ -189,10 +193,12 @@ class SerpApiClient:
                 url = None
             coordinates = item.get("gps_coordinates") or {}
             date = item.get("date")
-            event_date = None
+            event_date = event_start = None
             if isinstance(date, dict):
                 event_date = date.get("when") or date.get("start_date")
+                event_start = date.get("start_date")
                 date = None
+            venue = item.get("venue") if isinstance(item.get("venue"), dict) else {}
             address = item.get("address")
             if isinstance(address, list):
                 address = ", ".join(str(part) for part in address)
@@ -218,6 +224,8 @@ class SerpApiClient:
                 latitude=_float(coordinates.get("latitude")),
                 longitude=_float(coordinates.get("longitude")),
                 event_date=event_date,
+                event_start=event_start,
+                venue_name=venue.get("name"),
             ))
             if len(results) >= limit:
                 break

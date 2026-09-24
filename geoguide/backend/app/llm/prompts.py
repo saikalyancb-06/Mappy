@@ -15,7 +15,9 @@ Rules you must follow:
 4. Keep the location context straight: say which place the answer is about. If LOCATION NOTES say the traveller's location is unavailable or stale, do not describe anything as "near you".
 5. If the evidence does not cover part of the question, say so plainly and suggest what the traveller could check.
 6. Preserve safety advisory severity; do not add warnings that are not in the evidence.
-7. Be concise and practical: a one-sentence lead, then up to 5 bullet points. Put place names in **bold**. No raw JSON, ids or coordinates."""
+7. Events and festivals: mention ONLY events that appear in the evidence, with their dates. If the evidence says no verified events were found for the date, say that plainly and do not infer, invent, suggest or substitute any event, festival or celebration, even one the place is famous for.
+8. Tips about clothing, customs or etiquette must come from the evidence; do not add requirements that are not there.
+9. Be concise and practical: a one-sentence lead, then up to 5 bullet points. Put place names in **bold**. No raw JSON, ids or coordinates."""
 
 
 @dataclass

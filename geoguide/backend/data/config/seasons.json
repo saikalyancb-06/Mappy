@@ -1,0 +1,14 @@
+{
+  "_comment": "Season for a city on a date. Country calendars follow each country's meteorological department convention; everything else uses meteorological seasons by hemisphere. Peak tourist months come from each city's own data.",
+  "by_country": {
+    "IN": {"winter": [12, 1, 2], "summer": [3, 4, 5], "monsoon": [6, 7, 8, 9], "post-monsoon": [10, 11]},
+    "NP": {"winter": [12, 1, 2], "spring": [3, 4, 5], "monsoon": [6, 7, 8, 9], "autumn": [10, 11]},
+    "BT": {"winter": [12, 1, 2], "spring": [3, 4, 5], "monsoon": [6, 7, 8], "autumn": [9, 10, 11]},
+    "LK": {"north-east monsoon": [12, 1, 2], "first inter-monsoon": [3, 4], "south-west monsoon": [5, 6, 7, 8, 9], "second inter-monsoon": [10, 11]},
+    "MV": {"dry season (iruvai)": [12, 1, 2, 3, 4], "wet season (hulhangu)": [5, 6, 7, 8, 9, 10, 11]},
+    "TH": {"cool season": [11, 12, 1, 2], "hot season": [3, 4, 5], "rainy season": [6, 7, 8, 9, 10]}
+  },
+  "northern": {"winter": [12, 1, 2], "spring": [3, 4, 5], "summer": [6, 7, 8], "autumn": [9, 10, 11]},
+  "southern": {"summer": [12, 1, 2], "autumn": [3, 4, 5], "winter": [6, 7, 8], "spring": [9, 10, 11]},
+  "country_codes": {"india": "IN", "nepal": "NP", "bhutan": "BT", "sri lanka": "LK", "maldives": "MV", "thailand": "TH"}
+}

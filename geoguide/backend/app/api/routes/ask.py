@@ -27,5 +27,6 @@ def ask(payload: dict | None, authorization: str | None = Header(default=None)) 
         profile=profile,
         language=language if language in {"en", "kn", "hi"} else "en",
         debug=bool(safe.get("debug")) and APP_ENV != "production",
+        selected_date=str(safe.get("date"))[:10] if safe.get("date") else None,
     )
     return query_service.ask(request)

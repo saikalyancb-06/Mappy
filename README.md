@@ -1,6 +1,6 @@
 # GeoGuide
 
-A location-aware travel intelligence app. GeoGuide routes each question to the right sources (spatial search, place knowledge, live weather, safety data, web search), ranks the evidence, and only then asks the LLM to write a short answer that cites that evidence. The LLM writes the answer; the data provides the facts.
+A city-and-date travel intelligence app. The **city** is where (from GPS or a chosen place), the **date** is when (a date picker that re-runs everything), and the **intent** is what (Explore tabs, Ask). GeoGuide routes each question to the right sources (spatial search, place knowledge, live weather, safety data, web search), ranks the evidence, and only then asks the LLM to write a short answer that cites that evidence. The LLM writes the answer; the data provides the facts.
 
 The demo uses **Hampi** (Karnataka), but Hampi is only a *data pack*: no code knows about it, and any destination can be added by dropping in a pack.
 
@@ -45,7 +45,7 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
 
 1. Sign up, then pick interests.
 2. On **Start with a place**, choose **Hampi** and optionally turn on your location. The two stay separate: "near me" always means your device location, and "in Hampi" means Hampi.
-3. **Now** shows the local time, weather, daylight left, active advisories (with their stored severity), events, and a grounded briefing.
+3. **Explore** is the first screen: *Explore {city}* for the city resolved from your GPS or your chosen place. Pick a date (arrows, calendar, *Today* / *Tomorrow* / *This weekend*) and everything is recomputed for that city and day: a grounded briefing (with **Listen**), what's happening, the weather for that date (labelled forecast, recorded, dataset record or typical-for-date), the season, local tips (each says what it's based on), history, top attractions and active advisories. Tabs: Overview · What's happening (day / weekend / 7 days, grouped as Festivals, Music, Culture, Arts, Sports, Food…) · Things to do · Food · Hotels · History · Culture · Ask. The organisers' data gives a good demo: **Bengaluru on 24 Sep 2026** has *no verified events* (and says so), **20 Oct 2026** has the Boat Race and Monsoon Music Nights, and a date months ahead shows typical weather rather than a made-up forecast.
 4. **Nearby** lists ranked places with distance, open status, cost against your budget, visit length, access, a confidence badge and "Why this place" bars. Toggle between *Hampi* and *Near me*. You can:
    * type what you want in plain words, e.g. *peaceful, no museums, under ₹500, within 20 min by bike*. The chips show exactly what was understood;
    * switch to *Popular*, *Local favourites* or *Hidden gems*, or to *Within my budget*;
@@ -65,6 +65,25 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
 
    Tap a numbered chip to see its source. The 🐞 button shows the full retrieval trace in development.
 7. **Profile** sets interests, a daily spending limit with currency, usual transport, pace, walking and step-free access. These change ranking, budget fit and plans. Choosing Kannada or Hindi translates answers and keeps place names.
+
+## City + date context engine
+
+```
+GPS ─┐                         ┌─ place knowledge (RAG, place domain: history, overview…)
+     ├─► city resolver ─► CITY ├─ culture (RAG, culture domain: culture, etiquette, seasonal)
+pick ┘   (coverage → geocoder) ├─ events & festivals: city_id = ? AND start ≤ day ≤ end   (never a radius)
+                      DATE ───►├─ weather for the date: forecast │ recorded │ dataset record │ typical, labelled
+                               ├─ season (country calendar / hemisphere) + peak months
+                               ├─ attractions, advisories active on that date
+                               └─ tips = rules over the above, each with its basis
+                                         ▼
+                         grounded briefing (LLM) + validator ─► text / voice / follow-ups
+```
+
+* **Events are date-native and city-scoped.** A multi-day event matches every day it spans. Distance from you is only added for display. Two kinds are kept apart: *festivals* (recurring or cultural) and *live events* (concerts, exhibitions, matches, fairs). A festival that is only associated with a city, with no confirmed dates, appears separately as "dates not confirmed" and never as happening.
+* **Source order:** curated and organiser data → live event APIs (Ticketmaster, optional, where it has coverage) → web event listings (Google Events via SerpApi). Listings are kept only if their dates can be read and overlap the requested day or range. They are stored with their source and a *verified* timestamp. The LLM is never a source of events.
+* **Zero stays zero.** If nothing matches, the response is `events: []` with `event_status: "no_verified_events_found"`. The model receives `VERIFIED EVENTS: None` plus a hard rule not to infer or substitute. The validator rejects any event or festival name that isn't in the evidence, and the answer falls back to a deterministic one built from the evidence.
+* **Follow-ups keep the context.** Ask sends the selected date. "What's happening here this weekend?" resolves *here* from GPS and *this weekend* against the selected date.
 
 ## How a question is answered
 
@@ -115,8 +134,10 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/ask` | `{question, user_location?, active_destination?, selected_place_id?, language?, debug?}` → grounded answer + structured context |
+| `POST /api/ask` | `{question, user_location?, active_destination?, selected_place_id?, date?, language?, debug?}` → grounded answer + structured context |
 | `GET /api/now` | Briefing, weather, daylight, advisories, events, suggestions |
+| `GET /api/context` | City + date context: `destination_id` or GPS, `date=YYYY-MM-DD` (default: the city's today) → city, season, weather (with `basis`), events, tips, about, culture, attractions, advisories, grounded briefing |
+| `GET /api/events` | What's happening in the city: `date` plus `when` (*this weekend*, *next week*, *Oct 22*, *in October*) or `end`; grouped by category, with sources checked and `event_status` |
 | `GET /api/nearby` | Ranked places; `origin=auto\|user\|destination`, `category`, `group`, `open_now`, `radius_km`, `text` (free-text constraints), `ranking_mode`, `travel_mode`, `within_budget` |
 | `GET /api/hotels` | Best stays; `sort=best\|cheapest\|nearest\|top_rated`, `check_in`, `nights`, `max_price`, `min_stars`, `within_budget` |
 | `GET /api/search` | `q`, `kind=place\|stay\|destination`: typo-tolerant search over stored places, hotels and destinations, then live maps |
@@ -134,7 +155,7 @@ cd geoguide/backend && python -m pytest -q
 cd geoguide/frontend && npm run lint && npm run build
 ```
 
-The backend suite (101 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
+The backend suite (129 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
 
 * GPS available, missing, stale, low-accuracy or invalid, and "explicit destination vs GPS"
 * A labelled intent set, radius and category hard filters, and ranking precision@3
@@ -146,6 +167,7 @@ The backend suite (101 tests) runs offline against a fictional destination ("Tes
 * Itineraries: opening hours, locked stops, and re-plan direction
 * Dataset import against a mini database in the organisers' exact schema, the dataset weather fallback, and source conflicts
 * The constraint engine, hidden gems, budget fit, hotels with live rates, plan wishes, re-planning from the current state, route detours, compare and search
+* City + date: date ranges, city resolution, multi-day overlap, city scoping, cancelled and associated festivals, live listings (dated / undated / duplicate), weather basis per date, the three judge states (today, festival date, empty date), and an LLM that invents a festival being rejected
 * The full API
 
 ## Known limits
@@ -153,4 +175,6 @@ The backend suite (101 tests) runs offline against a fictional destination ("Tes
 * The PS-13 dataset is synthetic. Its facts are treated as a medium-confidence source and labelled.
 * Hotel nightly rates need `SERPAPI_KEY`. Without it, hotels are ranked on class, guest score and distance and marked "price not available".
 * Travel times, fares and detours are straight-line estimates (haversine × detour factor) and are labelled as estimates. There is no routing engine.
+* Official city and tourism websites are not scraped as a separate source; they reach GeoGuide only through web event listings. Ticketmaster is used only when `TICKETMASTER_API_KEY` is set.
+* Past dates use stored records only; live listings cover today onwards. Beyond the 16-day forecast, weather is the dataset's record for that date or the average of the last 3 years, never a forecast.
 * Not built: image search, offline packs and environmental or habitat data. No data source for them is connected.

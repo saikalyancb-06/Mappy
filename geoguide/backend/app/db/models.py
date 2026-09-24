@@ -205,6 +205,21 @@ class EventFestival(Base):
     data_source_id = Column(String, nullable=True)
     confidence = Column(Float, nullable=True)
     updated_at = Column(DateTime, default=utcnow)
+    # City-and-date event model (all additive). start_date/end_date are ISO dates; a record
+    # without them is only "associated with" the city and is never shown as happening on a date.
+    event_type = Column(String, nullable=True)  # festival (recurring/cultural) | live (concert, exhibition, match…)
+    category = Column(String, nullable=True)  # festival | music | culture | arts | sports | food | family | markets | outdoors | nightlife | other
+    city_key = Column(String, nullable=True, index=True)  # normalised "city|country" for events in cities without a stored destination
+    venue_name = Column(String, nullable=True)
+    significance = Column(Text, nullable=True)
+    traditions = Column(Text, nullable=True)
+    etiquette = Column(Text, nullable=True)
+    season = Column(String, nullable=True)
+    expected_footfall = Column(Integer, nullable=True)
+    status = Column(String, nullable=True)  # active | cancelled | postponed
+    source_id = Column(String, nullable=True)  # the provider's own id, used to de-duplicate live listings
+    source_published_at = Column(String, nullable=True)
+    last_verified_at = Column(String, nullable=True)  # when a source last confirmed this record (ISO)
 
 
 class WeatherDaily(Base):

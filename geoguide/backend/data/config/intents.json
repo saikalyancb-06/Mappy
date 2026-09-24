@@ -70,7 +70,14 @@
       "concerts",
       "fair",
       "utsav",
-      "celebration"
+      "celebration",
+      "what's on",
+      "whats on",
+      "what is on",
+      "anything on",
+      "going on",
+      "what's happening",
+      "whats happening"
     ],
     "web": [
       "latest",
@@ -234,7 +241,12 @@
     "at",
     "in",
     "near",
-    "around"
+    "around",
+    "next",
+    "coming",
+    "weekend",
+    "week",
+    "month"
   ],
   "determiners": [
     "the",

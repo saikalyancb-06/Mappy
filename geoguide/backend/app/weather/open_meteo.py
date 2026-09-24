@@ -5,11 +5,11 @@ Weather is never stored in the knowledge base. On failure the snapshot says
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from app.config import CACHE_TTL_WEATHER_S, OPEN_METEO_URL
+from app.config import CACHE_TTL_WEATHER_S, OPEN_METEO_ARCHIVE_URL, OPEN_METEO_URL
 from app.core.cache import cache_get, cache_set
 from app.core.http import ProviderError, get_json
 from app.core.rules import load_rules
@@ -22,6 +22,10 @@ WMO_CODES = {
     82: "Violent showers", 85: "Snow showers", 86: "Heavy snow showers", 95: "Thunderstorm",
     96: "Thunderstorm with hail", 99: "Thunderstorm with heavy hail",
 }
+FORECAST_DAYS = 16  # the provider's forecast horizon
+RECENT_PAST_DAYS = 90  # the forecast API also serves recent past days
+TYPICAL_YEARS = 3  # years averaged for "typical for this date"
+ARCHIVE_TTL_S = 30 * 86400
 RAIN_CODES = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99}
 
 
@@ -40,7 +44,7 @@ def _fetch(lat: float, lon: float) -> dict[str, Any]:
             "hourly": "temperature_2m,apparent_temperature,precipitation_probability,weather_code",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max",
             "timezone": "auto",
-            "forecast_days": 7,
+            "forecast_days": FORECAST_DAYS,
         },
         timeout=6.0,
     )
@@ -76,7 +80,9 @@ def get_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any]:
     now_local = datetime.now(tz)
     daily = raw.get("daily") or {}
     dates = daily.get("time") or []
-    index = min(max(day_offset, 0), len(dates) - 1) if dates else None
+    index = day_offset if 0 <= day_offset < len(dates) else None
+    if index is None and dates:
+        return {"status": "unavailable", "error": {"source": "open_meteo", "code": "out_of_range", "message": f"No forecast {day_offset} days ahead."}, "source": "open-meteo"}
 
     def pick(name: str) -> Any:
         values = daily.get(name) or []
@@ -134,6 +140,8 @@ def get_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any]:
     return {
         "status": "ok",
         "live": True,
+        "basis": "forecast",
+        "basis_label": "Live forecast (Open-Meteo)",
         "source": "open-meteo",
         "source_url": "https://open-meteo.com/",
         "retrieved_at": raw.get("retrieved_at"),
@@ -153,6 +161,19 @@ _DATASET_CONDITIONS = {"clear": ("Clear sky", 0), "partly_cloudy": ("Partly clou
 
 
 def dataset_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, Any] | None:
+    from app.geo.geocoding import nearest_destination
+
+    destination = nearest_destination(lat, lon)
+    if destination is None:
+        return None
+    target = (local_now(destination.timezone) + timedelta(days=day_offset)).date()
+    result = dataset_weather_on(destination.id, target, destination.timezone)
+    if result:
+        result["day_offset"] = day_offset
+    return result
+
+
+def dataset_weather_on(destination_id: str | None, target: date, timezone_name: str | None) -> dict[str, Any] | None:
     """Daily weather from an imported dataset for the destination containing the point.
 
     Only used when live weather is unavailable, and always labelled ``live: False``;
@@ -160,15 +181,12 @@ def dataset_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, An
     """
     from app.db.models import WeatherDaily
     from app.db.session import SessionLocal
-    from app.geo.geocoding import nearest_destination
 
-    destination = nearest_destination(lat, lon)
-    if destination is None:
+    if not destination_id:
         return None
-    now_local = local_now(destination.timezone)
-    target = (now_local + timedelta(days=day_offset)).date().isoformat()
+    now_local = local_now(timezone_name)
     with SessionLocal() as db:
-        row = db.query(WeatherDaily).filter(WeatherDaily.destination_id == destination.id, WeatherDaily.for_date == target).first()
+        row = db.query(WeatherDaily).filter(WeatherDaily.destination_id == destination_id, WeatherDaily.for_date == target.isoformat()).first()
     if row is None:
         return None
     summary, code = _DATASET_CONDITIONS.get(row.condition or "", (str(row.condition or "Unknown").replace("_", " ").title(), None))
@@ -186,9 +204,10 @@ def dataset_weather(lat: float, lon: float, day_offset: int = 0) -> dict[str, An
     }
     return {
         "status": "ok", "live": False, "source": "dataset weather_daily", "source_url": None,
+        "basis": "dataset", "basis_label": "Dataset daily record (not a live forecast)",
         "note": "Live weather is unavailable; showing the dataset's daily record for this date.",
         "retrieved_at": row.updated_at.isoformat() + "Z" if row.updated_at else None, "cached": False,
-        "timezone": destination.timezone, "local_time": now_local.isoformat(timespec="minutes"), "day_offset": day_offset,
+        "timezone": timezone_name, "local_time": now_local.isoformat(timespec="minutes"), "day_offset": (target - now_local.date()).days,
         "current": None, "day": day, "hourly": [], "daylight_left_min": None, "signals": signals,
     }
 
@@ -214,3 +233,117 @@ def local_now(timezone_name: str | None) -> datetime:
 def day_start(timezone_name: str | None, day_offset: int) -> datetime:
     now = local_now(timezone_name)
     return (now + timedelta(days=day_offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+# ---- weather for a selected date -----------------------------------------------------------
+
+_DAILY_FIELDS = "weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,sunrise,sunset"
+
+
+def _fetch_daily(url: str, lat: float, lon: float, start: date, end: date, ttl_s: int) -> dict[str, Any]:
+    key = f"{url}|{lat:.3f},{lon:.3f}|{start}|{end}"
+    cached = cache_get("weather_daily", key)
+    if cached is not None:
+        return {**cached["data"], "cached": True, "retrieved_at": cached["created_at"]}
+    payload = get_json("open_meteo", url, params={"latitude": round(lat, 4), "longitude": round(lon, 4), "daily": _DAILY_FIELDS, "timezone": "auto", "start_date": start.isoformat(), "end_date": end.isoformat()}, timeout=8.0)
+    entry = cache_set("weather_daily", key, payload, ttl_s, source="open-meteo")
+    return {**payload, "cached": False, "retrieved_at": entry["created_at"]}
+
+
+def _day_block(daily: dict[str, Any], index: int) -> dict[str, Any]:
+    def pick(name: str) -> Any:
+        values = daily.get(name) or []
+        return values[index] if index < len(values) else None
+
+    code = pick("weather_code")
+    day = {
+        "date": (daily.get("time") or [None])[index], "summary": WMO_CODES.get(code, "Unknown conditions"), "weather_code": code,
+        "temp_max_c": pick("temperature_2m_max"), "temp_min_c": pick("temperature_2m_min"), "apparent_max_c": pick("apparent_temperature_max"),
+        "precipitation_probability_max": pick("precipitation_probability_max"), "precipitation_mm": pick("precipitation_sum"),
+        "uv_index_max": pick("uv_index_max"), "sunrise": pick("sunrise"), "sunset": pick("sunset"),
+    }
+    day["signals"] = _signals(day["apparent_max_c"], day["precipitation_probability_max"], code) + (["rain"] if (day["precipitation_mm"] or 0) >= 5 and code not in RAIN_CODES else [])
+    return day
+
+
+def _snapshot(day: dict[str, Any], *, basis: str, label: str, live: bool, timezone_name: str | None, retrieved_at: str | None, cached: bool, source_url: str, note: str | None = None, offset: int = 0) -> dict[str, Any]:
+    return {
+        "status": "ok", "live": live, "basis": basis, "basis_label": label, "source": "open-meteo", "source_url": source_url,
+        "retrieved_at": retrieved_at, "cached": cached, "timezone": timezone_name, "local_time": local_now(timezone_name).isoformat(timespec="minutes"),
+        "day_offset": offset, "current": None, "day": day, "hourly": [], "daylight_left_min": None, "signals": sorted(set(day.get("signals") or [])), "note": note,
+    }
+
+
+def _typical(lat: float, lon: float, target: date, timezone_name: str | None, offset: int) -> dict[str, Any] | None:
+    """Average of the same calendar date in recent years, labelled as typical, never as a forecast."""
+    days, years = [], []
+    for back in range(1, TYPICAL_YEARS + 1):
+        try:
+            day = target.replace(year=target.year - back)
+        except ValueError:  # 29 Feb
+            day = target.replace(year=target.year - back, day=28)
+        if day >= local_now(timezone_name).date() - timedelta(days=5):
+            continue  # the archive lags a few days; only use settled records
+        try:
+            raw = _fetch_daily(OPEN_METEO_ARCHIVE_URL, lat, lon, day, day, ARCHIVE_TTL_S)
+        except ProviderError:
+            continue
+        daily = raw.get("daily") or {}
+        if daily.get("time"):
+            days.append(_day_block(daily, 0))
+            years.append(day.year)
+    if not days:
+        return None
+
+    def mean(name: str) -> float | None:
+        values = [d[name] for d in days if d.get(name) is not None]
+        return round(sum(values) / len(values), 1) if values else None
+
+    rainy = sum(1 for d in days if "rain" in d["signals"])
+    day = {
+        "date": target.isoformat(), "summary": f"Rain on {rainy} of the last {len(days)} years on this date" if rainy else f"Dry on this date in each of the last {len(days)} years",
+        "weather_code": None, "temp_max_c": mean("temp_max_c"), "temp_min_c": mean("temp_min_c"), "apparent_max_c": mean("apparent_max_c"),
+        "precipitation_probability_max": None, "precipitation_mm": mean("precipitation_mm"), "uv_index_max": None, "sunrise": None, "sunset": None,
+        "rain_years": rainy, "years": sorted(years),
+    }
+    day["signals"] = (["heat"] if day["apparent_max_c"] is not None and day["apparent_max_c"] >= load_rules("ranking")["weather"]["heat_apparent_c"] else []) + (["rain"] if rainy * 2 > len(days) else [])
+    label = f"Typical for this date (average of {min(years)}–{max(years)} records) — not a forecast"
+    return _snapshot(day, basis="typical", label=label, live=False, timezone_name=timezone_name, retrieved_at=None, cached=True, source_url="https://open-meteo.com/en/docs/historical-weather-api", note="No forecast exists this far ahead.", offset=offset)
+
+
+def weather_on(lat: float, lon: float, target: date, *, timezone_name: str | None = None, destination_id: str | None = None) -> dict[str, Any]:
+    """Weather for a specific date, from the best source that can speak for it.
+
+    * today … +15 days: the live forecast;
+    * the past: recorded weather (recent days from the forecast API, older ones from the archive);
+    * further ahead: the dataset's record for that date if one exists, otherwise the typical
+      weather on that date in recent years. Each result says which one it is (``basis``).
+    """
+    today = local_now(timezone_name).date()
+    offset = (target - today).days
+    if 0 <= offset < FORECAST_DAYS:
+        weather = get_weather(lat, lon, offset)
+        if weather.get("status") == "ok" and (weather.get("day") or {}).get("date") == target.isoformat():
+            return weather
+        if weather.get("status") == "ok" and weather.get("basis") == "dataset":
+            return weather
+        fallback = dataset_weather_on(destination_id, target, timezone_name)
+        return fallback or {"status": "unavailable", "error": weather.get("error") or {"source": "open_meteo", "code": "unavailable", "message": "Weather unavailable"}, "source": "open-meteo", "date": target.isoformat()}
+    if offset < 0:
+        url = OPEN_METEO_URL if -offset <= RECENT_PAST_DAYS else OPEN_METEO_ARCHIVE_URL
+        try:
+            raw = _fetch_daily(url, lat, lon, target, target, ARCHIVE_TTL_S if -offset > 2 else CACHE_TTL_WEATHER_S)
+            daily = raw.get("daily") or {}
+            if daily.get("time"):
+                return _snapshot(_day_block(daily, 0), basis="observed", label="Recorded weather (Open-Meteo)", live=True, timezone_name=raw.get("timezone") or timezone_name, retrieved_at=raw.get("retrieved_at"), cached=raw.get("cached", False), source_url="https://open-meteo.com/", offset=offset)
+            error = {"source": "open_meteo", "code": "no_data", "message": "No recorded weather for that date."}
+        except ProviderError as exc:
+            error = exc.as_dict()
+        fallback = dataset_weather_on(destination_id, target, timezone_name)
+        return fallback or {"status": "unavailable", "error": error, "source": "open-meteo", "date": target.isoformat()}
+    stored = dataset_weather_on(destination_id, target, timezone_name)
+    if stored:
+        stored["note"] = "No forecast exists this far ahead; this is the dataset's record for the date."
+        return stored
+    typical = _typical(lat, lon, target, timezone_name, offset)
+    return typical or {"status": "unavailable", "error": {"source": "open_meteo", "code": "beyond_forecast", "message": f"No forecast exists {offset} days ahead and no historical record could be retrieved."}, "source": "open-meteo", "date": target.isoformat()}

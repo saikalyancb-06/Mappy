@@ -23,6 +23,7 @@ class ChunkFilter:
     destination_id: str | None = None
     poi_ids: Iterable[str] | None = None
     kinds: Iterable[str] | None = None
+    categories: Iterable[str] | None = None  # knowledge sections (history, culture, etiquette…) for domain-scoped retrieval
     include_destination_level: bool = True  # with poi_ids, also keep destination-wide chunks
 
 
@@ -62,6 +63,9 @@ def _apply_filter(statement, flt: ChunkFilter):
     kinds = list(flt.kinds or [])
     if kinds:
         statement = statement.where(KnowledgeChunk.kind.in_(kinds))
+    categories = list(flt.categories or [])
+    if categories:
+        statement = statement.where(KnowledgeChunk.category.in_(categories))
     return statement
 
 
