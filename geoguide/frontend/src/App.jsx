@@ -2,6 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Check, ChevronRight } from 'lucide-react'
 import { clearApiCache, describeLocation, ensureCity, getCityStatus, getConfig, getCurrentUser, getHealth, getPreferences, getToken, logIn, logOut, recordInteraction, signUp, updatePreferences } from './api'
 import ContextBar from './components/ContextBar'
+import { clearPacks } from './offline/packs'
+import { refreshStalePack, useOnline, usePacks } from './offline/useOffline'
 import { BottomTabBar, Chip, StateMessage } from './components/ui'
 import { useDeviceLocation } from './hooks/useDeviceLocation'
 import ExploreView from './views/ExploreView'
@@ -91,6 +93,8 @@ function App() {
   const [dataVersion, setDataVersion] = useState(0) // bumps when new city data lands, so screens reload
   const [debugAvailable, setDebugAvailable] = useState(false)
   const device = useDeviceLocation()
+  const online = useOnline()
+  const offlinePacks = usePacks()
   const [stableLocation, setStableLocation] = useState(device.location)
 
   useEffect(() => {
@@ -101,10 +105,19 @@ function App() {
 
   // Session + configuration
   useEffect(() => {
-    getConfig().then(setConfig).catch((error) => setConfigError(error.message))
+    // Config and the signed-in user are remembered so the app also starts with no connection.
+    getConfig().then((result) => { setConfig(result); writeJson('geoguide-config', result) }).catch((error) => {
+      const saved = readJson('geoguide-config', null)
+      if (saved) setConfig(saved)
+      else setConfigError(error.message)
+    })
     getHealth().then((health) => setDebugAvailable(health.environment !== 'production')).catch(() => {})
     if (!getToken()) { window.setTimeout(() => setAuthChecked(true), 0); return }
-    getCurrentUser().then(({ user: current }) => setUser(current)).catch(() => localStorage.removeItem('geoguide-token')).finally(() => setAuthChecked(true))
+    getCurrentUser().then(({ user: current }) => { setUser(current); writeJson('geoguide-user', current) }).catch((error) => {
+      if (error.status === 401 || error.status === 403) { localStorage.removeItem('geoguide-token'); writeJson('geoguide-user', null); return }
+      const saved = readJson('geoguide-user', null)  // offline: keep the session, it is checked again when online
+      if (saved) setUser(saved)
+    }).finally(() => setAuthChecked(true))
   }, [])
 
   useEffect(() => {
@@ -177,13 +190,20 @@ function App() {
     }).catch(() => setPreparing(null))
   }, [prepareCity])
 
+  // A saved offline pack is kept fresh while online.
+  useEffect(() => {
+    if (!online || !destination?.destination_id) return undefined
+    const t = window.setTimeout(() => refreshStalePack(destination.destination_id), 3000)
+    return () => window.clearTimeout(t)
+  }, [online, destination?.destination_id])
+
   // A city chosen in an earlier session is re-checked once (stale parts refresh in the background).
   useEffect(() => {
-    if (!user || !destination?.destination_id || checkedCities.current.has(destination.destination_id)) return undefined
+    if (!user || !online || !destination?.destination_id || checkedCities.current.has(destination.destination_id)) return undefined
     checkedCities.current.add(destination.destination_id)
     const timer = window.setTimeout(() => { prepareCity(destination).catch(() => {}) }, 0)
     return () => window.clearTimeout(timer)
-  }, [user, destination?.destination_id, prepareCity]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, online, destination?.destination_id, prepareCity]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearDestination = () => { setDestination(null); writeJson(DESTINATION_KEY, null) }
 
@@ -231,7 +251,10 @@ function App() {
 
   const logout = async () => {
     try { await logOut() } catch { /* already logged out */ }
-    ;['geoguide-token', 'geoguide-onboarded', DESTINATION_KEY, SAVED_KEY].forEach((key) => localStorage.removeItem(key))
+    ;['geoguide-token', 'geoguide-onboarded', 'geoguide-user', DESTINATION_KEY, SAVED_KEY].forEach((key) => localStorage.removeItem(key))
+    clearApiCache()
+    clearPacks().catch(() => {})
+    navigator.serviceWorker?.controller?.postMessage('clear-api-cache')
     device.stop()
     setUser(null)
     setOnboarded(false)
@@ -243,7 +266,7 @@ function App() {
   if (window.location.pathname === '/dev/ui-kit') return <StateMessage title="UI kit moved" body="Components live in src/components." />
   if (!authChecked) return <div className="loading-screen">Loading GeoGuide…</div>
   if (configError) return <div className="loading-screen"><StateMessage title="Backend unavailable" body={configError} action={<button className="secondary-button" onClick={() => window.location.reload()} type="button">Retry</button>} /></div>
-  if (!user) return <AuthView onAuthenticated={setUser} />
+  if (!user) return <AuthView onAuthenticated={(signedIn) => { writeJson('geoguide-user', signedIn); setUser(signedIn) }} />
   if (!onboarded) return <Onboarding config={config} onComplete={completeOnboarding} />
   if (choosingStart || (!destination && !stableLocation)) {
     return <StartView device={device} here={here} locating={wantHere} onUseLocation={useMyLocation} onChooseDestination={chooseDestination} canContinue={Boolean(destination || stableLocation)} onContinue={() => setChoosingStart(false)} onCancel={destination || stableLocation ? () => setChoosingStart(false) : null} />
@@ -251,7 +274,7 @@ function App() {
 
   const openPlace = (place) => setSelectedPlace(place)
   const views = {
-    now: <ExploreView context={context} language={preferences.language} selectedDate={selectedDate} onDateChange={setSelectedDate} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onAsk={() => setActiveTab('ask')} onGoNearby={() => setActiveTab('nearby')} onChooseDestination={chooseDestination} />,
+    now: <ExploreView context={context} online={online} language={preferences.language} selectedDate={selectedDate} onDateChange={setSelectedDate} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onAsk={() => setActiveTab('ask')} onGoNearby={() => setActiveTab('nearby')} onChooseDestination={chooseDestination} />,
     nearby: <NearbyView context={context} config={config} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onEnableLocation={device.start} onChooseDestination={chooseDestination} hasBudget={Boolean(preferences.max_daily_budget)} />,
     plan: <PlanView context={context} config={config} savedIds={savedIds} onToggleSaved={toggleSaved} onOpen={openPlace} onEnableLocation={device.start} profile={preferences} />,
     ask: <AskView context={context} selectedDate={selectedDate} onClearDate={() => setSelectedDate(null)} language={preferences.language} selectedPlace={askPlace} onClearSelected={() => setAskPlace(null)} onAdoptDestination={chooseDestination} onOpen={openPlace} debugAvailable={debugAvailable} />,
@@ -260,6 +283,7 @@ function App() {
 
   return <div className="app-frame">
     <main className={`app-scroll ${selectedPlace ? 'detail-scroll' : ''}`}>
+      {!online && <div className="offline-banner" role="status">{offlinePacks.some((p) => p.id === destination?.destination_id) ? `Offline · using your saved ${destination?.name} guide` : destination?.destination_id ? `Offline · ${destination.name} isn't saved for offline; showing what this device has seen` : 'Offline · showing what this device has already seen'}</div>}
       {!selectedPlace && <ContextBar destination={destination} device={device} here={stableLocation ? here : null} onExploreHere={() => here?.destination_id && chooseDestination(here)} onChangeDestination={() => setChoosingStart(true)} onClearDestination={clearDestination} onEnableLocation={device.start} />}
       {preparing && ['QUEUED', 'ENRICHING'].includes(preparing.status) && preparing.destination_id === destination?.destination_id && !selectedPlace && <section className="ingestion-card"><div className="verified-row"><span className="verified-dot" /> Preparing your {destination?.name} guide… <strong>{preparing.progress || 0}%</strong></div><div className="progress-track"><span style={{ width: `${Math.max(5, preparing.progress || 0)}%` }} /></div><p>{Object.entries(preparing.components || {}).filter(([, c]) => ['done', 'empty'].includes(c.status)).map(([name]) => name).join(' · ') || 'Collecting famous places, history and local knowledge.'}{preparing.places ? ` · ${preparing.places} places so far` : ''}. You can start exploring now; answers get richer as it fills in.</p></section>}
       <Suspense fallback={<div className="skeleton-card" />}>{selectedPlace

@@ -50,7 +50,7 @@ export function WeatherPill({ weather }) {
   return <div className="weather-pill" title={ok ? (weather.live === false ? weather.note : `Open-Meteo, updated ${weather.retrieved_at || ''}`) : 'Live weather unavailable'}><span className="weather-symbol">{ok ? '☼' : '–'}</span><span><small>{weather?.live === false ? 'Weather (not live)' : 'Weather'}</small><strong>{summary}</strong></span></div>
 }
 
-const SOURCE_LABEL = { curated: 'Verified data', serpapi_maps: 'Live search', serpapi_hotels: 'Live rates', osm: 'OpenStreetMap', dataset: 'Organiser dataset', database: 'Stored data' }
+const SOURCE_LABEL = { offline: 'Saved offline', google_maps: 'Google Maps', curated: 'Verified data', serpapi_maps: 'Live search', serpapi_hotels: 'Live rates', osm: 'OpenStreetMap', dataset: 'Organiser dataset', database: 'Stored data' }
 
 export function SourceBadge({ place }) {
   const types = [...new Set((place.sources || []).map((source) => source.source_type))]

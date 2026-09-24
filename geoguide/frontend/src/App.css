@@ -443,3 +443,13 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .saved-row small { grid-column: 1 / -1; }
 .saved-actions { grid-column: 1 / -1; display: flex; gap: 6px; }
 .saved-actions .chip { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+
+/* offline */
+.offline-banner { position: sticky; top: 0; z-index: 20; margin: -4px 0 12px; padding: 8px 12px; border-radius: 14px; background: #3b3b2f; color: #fff; font-size: 13px; font-weight: 700; }
+.offline-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin: 14px 0; padding: 14px; border-radius: 18px; background: rgba(255,255,255,.8); border: 1px dashed var(--line); }
+.offline-card.saved { border-style: solid; }
+.offline-card strong { display: inline-flex; align-items: center; gap: 6px; color: var(--forest); }
+.offline-card p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.offline-card .form-error { grid-column: 1 / -1; }
+.offline-actions { display: flex; gap: 6px; }
+.offline-actions .chip { display: inline-flex; align-items: center; gap: 4px; }

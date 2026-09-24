@@ -4,6 +4,7 @@ import { getCityBriefing, getCityContext, getEventsOverview, getHotels, getNearb
 import RichText from '../components/RichText'
 import SearchBox from '../components/SearchBox'
 import EventSubmitSheet from '../components/EventSubmitSheet'
+import OfflineCard from '../components/OfflineCard'
 import { AdvisoryList, Chip, EventCard, IconCircleButton, Notices, PlaceCard, SectionTitle, StateMessage, TipList } from '../components/ui'
 import { addDays, formatDay, relativeDay, titleCase, upcomingSaturday } from '../format'
 
@@ -63,7 +64,7 @@ function DateBar({ selected, today, onChange }) {
   </div>
 }
 
-export default function ExploreView({ context, language, selectedDate, onDateChange, onOpen, onSave, savedIds, onAsk, onGoNearby, onChooseDestination }) {
+export default function ExploreView({ context, online = true, language, selectedDate, onDateChange, onOpen, onSave, savedIds, onAsk, onGoNearby, onChooseDestination }) {
   const [mode, setMode] = useState('overview')
   const [eventsNear, setEventsNear] = useState('destination') // destination | me
   const [eventTab, setEventTab] = useState(null)
@@ -142,6 +143,7 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
       {eventList.associated_festivals?.length > 0 && <p className="muted-text">Usually around this time (dates not confirmed): {eventList.associated_festivals.map((f) => f.name).join(', ')}.</p>}
 
       <WeatherCard weather={data.weather} dateLabel={dateLabel} />
+      <OfflineCard destination={context.destination} online={online} />
 
       <SectionTitle eyebrow="🧳 Local tips">For {formatDay(selected, false)}</SectionTitle>
       <TipList tips={data.tips} />

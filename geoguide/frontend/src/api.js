@@ -1,6 +1,8 @@
 // Thin client for the GeoGuide API. No keys or provider calls live in the frontend:
 // every external service (LLM, web search, weather, maps) is reached through the backend.
 
+import { offlineFallback } from './offline/fallback'
+
 const TOKEN_KEY = 'geoguide-token'
 
 export const getToken = () => {
@@ -43,7 +45,10 @@ const request = async (path, options = {}) => {
   const key = `${getToken() || ''}|${path}`
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < ttl) return hit.promise
-  const promise = send(path, options)
+  const promise = send(path, options).then((data) => {
+    if (data?.offline) cache.delete(key)  // offline answers are never reused once the connection is back
+    return data
+  })
   cache.set(key, { at: Date.now(), promise })
   promise.catch(() => cache.delete(key))  // never cache failures
   if (cache.size > 300) cache.delete(cache.keys().next().value)
@@ -59,7 +64,10 @@ const send = async (path, options = {}) => {
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
     })
   } catch {
-    throw new ApiError('GeoGuide is unreachable. Check your connection and that the backend is running.', 0)
+    // No network: answer from a saved offline city pack when there is one.
+    const saved = await offlineFallback(path, options).catch(() => null)
+    if (saved) return saved
+    throw new ApiError(navigator.onLine === false ? "You're offline. Save a city for offline use to keep exploring without a connection." : 'GeoGuide is unreachable. Check your connection and that the backend is running.', 0)
   }
   if (!response.ok) {
     let detail = null
@@ -67,7 +75,12 @@ const send = async (path, options = {}) => {
     const message = typeof detail === 'string' ? detail : detail?.message || `Request failed (${response.status})`
     throw new ApiError(message, response.status, detail)
   }
-  return response.json()
+  const data = await response.json()
+  // A saved copy served by the service worker while offline: say so, and when it was saved.
+  if (response.headers.get('X-GeoGuide-Offline') && data && typeof data === 'object' && !Array.isArray(data)) {
+    return { ...data, offline: true, offline_saved_at: response.headers.get('X-GeoGuide-Saved-At') }
+  }
+  return data
 }
 
 // ---- context params: physical location and active destination are sent separately ----
@@ -116,6 +129,7 @@ export const prefetchArea = (context) => request('/api/destinations/prefetch', {
 export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/${jobId}`)
 // City intelligence: selecting a city registers it and prepares its guide in the background.
 export const ensureCity = (place) => request('/api/destinations/ensure', { method: 'POST', body: JSON.stringify(place.destination_id ? { destination_id: place.destination_id } : { name: place.name, lat: place.lat, lon: place.lon, country: place.country, region: place.region }) })
+export const getOfflinePack = (destinationId) => send(`/api/destinations/${encodeURIComponent(destinationId)}/offline-pack`)
 export const getCityStatus = (destinationId) => request(`/api/destinations/${encodeURIComponent(destinationId)}/status`)
 
 // ---- screens ----

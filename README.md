@@ -107,6 +107,7 @@ Independent provider calls run in parallel, connections are pooled, responses ar
 * **Plan export:** "Add to calendar" downloads the day as an `.ics` file in the destination's timezone. "Route in Maps" opens every stop as a Google Maps route, and "Share" uses the phone's share sheet.
 * **More like this:** each place shows similar places nearby (same category or kind, shared vibes, rating, distance). The recommendation policy applies.
 * **Saved places:** Profile lists what you saved; these are also the plan's must-sees.
+* **Offline:** screens you've opened keep working without a connection, and "Save for offline" stores a whole city (places with opening hours, guide, events, safety notes) on the device. Nearby, search and Ask then answer from it. See **[docs/offline.md](docs/offline.md)**.
 
 ## Feedback, vibes and events
 
