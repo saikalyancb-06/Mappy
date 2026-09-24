@@ -250,5 +250,113 @@
     "RECOMMENDATION": null
   },
   "near_me_radius_km": 3.0,
-  "max_radius_km": 50.0
+  "max_radius_km": 50.0,
+  "query_expansions": {
+    "famous": [
+      "known",
+      "important",
+      "significance",
+      "celebrated",
+      "iconic",
+      "heritage"
+    ],
+    "known": [
+      "famous",
+      "important",
+      "significance"
+    ],
+    "important": [
+      "significance",
+      "significant",
+      "heritage",
+      "famous"
+    ],
+    "history": [
+      "historical",
+      "founded",
+      "empire",
+      "built",
+      "century",
+      "dynasty"
+    ],
+    "historical": [
+      "history",
+      "founded",
+      "empire",
+      "century"
+    ],
+    "old": [
+      "history",
+      "century",
+      "ancient"
+    ],
+    "dress": [
+      "wear",
+      "clothing",
+      "modestly",
+      "footwear",
+      "shoulders"
+    ],
+    "wear": [
+      "dress",
+      "clothing",
+      "modestly",
+      "footwear"
+    ],
+    "family": [
+      "families",
+      "children",
+      "kids"
+    ],
+    "kids": [
+      "children",
+      "families",
+      "family"
+    ],
+    "hot": [
+      "heat",
+      "temperature",
+      "shade",
+      "water"
+    ],
+    "safe": [
+      "safety",
+      "danger",
+      "caution"
+    ],
+    "eat": [
+      "food",
+      "restaurant",
+      "vegetarian",
+      "thali"
+    ],
+    "food": [
+      "eat",
+      "restaurant",
+      "vegetarian",
+      "thali",
+      "cafes"
+    ],
+    "get around": [
+      "transport",
+      "auto",
+      "bicycle",
+      "ferry",
+      "walking"
+    ],
+    "around": [
+      "transport",
+      "getting"
+    ],
+    "best time": [
+      "climate",
+      "months",
+      "comfortable",
+      "season"
+    ],
+    "visit": [
+      "see",
+      "highlights"
+    ]
+  }
 }

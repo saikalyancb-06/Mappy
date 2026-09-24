@@ -109,3 +109,17 @@ def test_serpapi_parsing_and_missing_key():
         assert exc.code == "web_search_unavailable"
     else:
         raise AssertionError("missing key must raise")
+
+
+def test_acronyms_and_branch_suffixes_with_unlocatable_locality():
+    """A mention using an acronym resolves to the expanded name in the named locality, not a suffixed branch,
+    even when the locality cannot be geocoded and the traveller is far away."""
+    web = FakeSerp([
+        maps_result("Sri Lakshmi Venkateshwara (SLV) Hotel", 12.948, 77.571, address="Gandhi Bazaar Main Rd, Basavanagudi", place_type="South Indian restaurant"),
+        maps_result("SLV Hotel Jayanagar", 12.930, 77.583, address="9th Block, Jayanagar", place_type="Restaurant"),
+    ])
+    resolution = resolve_entity("SLV Hotel", locality_hint="Gandhi Bazaar", category_hint="hotel", reference=(15.33, 76.46), web=web)
+    assert resolution.status == "resolved"
+    assert resolution.entity.name.startswith("Sri Lakshmi Venkateshwara")
+    elsewhere = resolve_entity("SLV Hotel", locality_hint="Jayanagar", category_hint="hotel", reference=(15.33, 76.46), web=web)
+    assert elsewhere.status == "resolved" and elsewhere.entity.name == "SLV Hotel Jayanagar"

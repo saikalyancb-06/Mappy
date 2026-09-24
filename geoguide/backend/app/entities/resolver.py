@@ -95,6 +95,18 @@ def _web_candidates(mention: str, locality_text: str | None, point: tuple[float,
     return candidates
 
 
+def _acronym_explained(mention_tokens: set[str], name: str) -> set[str]:
+    """Candidate-name tokens accounted for by an acronym in the mention ("SLV" → Sri Lakshmi Venkateshwara)."""
+    words = tokens(name)
+    explained: set[str] = set()
+    for acronym in (t for t in mention_tokens if 2 <= len(t) <= 6):
+        for start in range(len(words)):
+            span = words[start : start + len(acronym)]
+            if len(span) == len(acronym) and "".join(word[0] for word in span) == acronym:
+                explained.update(span)
+    return explained
+
+
 def _compatible(hint: str | None, category: str | None) -> float:
     if not hint:
         return 0.5
@@ -115,7 +127,7 @@ def score_candidate(candidate: Candidate, mention: str, locality_text: str | Non
     # Branch / suffix analysis: distinctive words in the candidate name that the user did not say
     # ("<name> Jayanagar" vs "<name>") indicate a different branch unless the locality explains them.
     mention_tokens = distinctive_tokens(mention) | distinctive_tokens(locality_text)
-    extra = distinctive_tokens(candidate.name) - mention_tokens
+    extra = distinctive_tokens(candidate.name) - mention_tokens - _acronym_explained(set(tokens(mention)), candidate.name)
     if alias_names and any(distinctive_tokens(alias) <= mention_tokens and distinctive_tokens(alias) for alias in alias_names):
         extra = set()
     branch_penalty = min(rules["branch_penalty_max"], rules["branch_penalty_per_token"] * len(extra))
@@ -131,7 +143,8 @@ def score_candidate(candidate: Candidate, mention: str, locality_text: str | Non
     else:
         locality = 0.5
 
-    anchor = locality_point or reference
+    # A named locality defines "where"; the traveller's own position is only used when no locality was given.
+    anchor = locality_point or (reference if not locality_text else None)
     distance = math.exp(-haversine_km(anchor[0], anchor[1], candidate.lat, candidate.lon) / rules["distance_scale_km"]) if anchor and candidate.lat is not None else 0.5
     agreement = min(1.0, (len({s.source_type for s in candidate.sources}) - 1) / 2) if candidate.sources else 0.0
     category = _compatible(category_hint, candidate.category)

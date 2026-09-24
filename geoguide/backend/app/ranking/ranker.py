@@ -239,7 +239,7 @@ def rank(candidates: list[Candidate], request: RankRequest) -> RankResult:
             reasons.append(f"{_format_distance(candidate.distance_km)} from {request.reference_label}")
         if candidate.rating is not None:
             reasons.append(f"Rated {candidate.rating:.1f}" + (f" ({candidate.review_count:,} reviews)" if candidate.review_count else ""))
-        if request.user_point and candidate.lat is not None and request.reference_label and not request.reference_label.startswith("your"):
+        if request.user_point and candidate.lat is not None and request.reference_label and request.reference_label != "you":
             reasons.append(f"{_format_distance(haversine_km(request.user_point[0], request.user_point[1], candidate.lat, candidate.lon))} from you")
         candidate.reasons = list(dict.fromkeys(reasons))
         ranked.append(candidate)

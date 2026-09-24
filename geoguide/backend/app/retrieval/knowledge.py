@@ -11,6 +11,7 @@ from typing import Any, Iterable
 
 from sqlalchemy import select
 
+from app.core.rules import load_rules
 from app.core.text import normalize
 from app.db.models import EntityAlias, KnowledgeChunk
 from app.db.session import SessionLocal
@@ -54,6 +55,14 @@ class KnowledgeResult:
     vector_matches: int
 
 
+def expand_query(query: str) -> str:
+    """Add configured related terms (data/config/intents.json) to help the lexical half of retrieval."""
+    expansions = load_rules("intents").get("query_expansions", {})
+    padded = f" {query} "
+    extra = [term for phrase, terms in expansions.items() if f" {normalize(phrase)} " in padded for term in terms]
+    return " ".join([query, *extra])
+
+
 def retrieve(
     query: str,
     *,
@@ -78,6 +87,7 @@ def retrieve(
         stripped = f" {lexical_query} ".replace(f" {alias} ", " ").strip()
         if stripped:
             lexical_query = stripped
+    lexical_query = expand_query(lexical_query)
     lexical = bm25_scores(lexical_query, [(chunk.id, f"{chunk.title or ''} {chunk.content}") for chunk in chunks.values()])
 
     vector: dict[str, float] = {}

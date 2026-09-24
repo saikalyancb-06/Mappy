@@ -89,7 +89,7 @@ def _clean_mention(phrase: str) -> str:
     while words and words[0].lower() in rules["determiners"]:
         words = words[1:]
     cue_words = _cue_words()
-    # Drop trailing qualifiers ("Hampi historically") that describe the question, not the place.
+    # Drop trailing qualifiers ("<place> historically") that describe the question, not the place.
     while len(words) > 1 and normalize(words[-1]) in cue_words:
         words = words[:-1]
     return " ".join(words).strip(" '\"")
@@ -254,7 +254,7 @@ def parse_query(text: str, *, has_selected_entity: bool = False) -> QueryIntent:
     if entity and place and normalize(entity) == normalize(place):
         place = None
 
-    # Detect categories on the text with named places removed ("SLV Hotel", "Hampi Bazaar"
+    # Detect categories on the text with named places removed ("<name> Hotel", "<name> Bazaar"
     # name places, they do not ask for hotels or markets).
     category_text = norm
     for mention in (entity, place):

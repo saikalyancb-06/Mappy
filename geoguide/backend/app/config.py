@@ -42,6 +42,7 @@ LLM_QUERY_PARSING = _bool("LLM_QUERY_PARSING", True)
 
 # Web search (SerpApi)
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
+SERPAPI_URL = os.getenv("SERPAPI_URL", "https://serpapi.com/search.json")
 SERPAPI_TIMEOUT_SECONDS = float(os.getenv("SERPAPI_TIMEOUT_SECONDS", "8"))
 
 # Semantic embeddings

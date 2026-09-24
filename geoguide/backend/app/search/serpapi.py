@@ -16,11 +16,10 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.config import CACHE_TTL_WEB_S, SERPAPI_KEY, SERPAPI_TIMEOUT_SECONDS
+from app.config import CACHE_TTL_WEB_S, SERPAPI_KEY, SERPAPI_TIMEOUT_SECONDS, SERPAPI_URL
 from app.core.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
-_SERPAPI_URL = "https://serpapi.com/search.json"
 ENGINES = {"google", "google_maps", "google_news", "google_events"}
 
 
@@ -123,7 +122,7 @@ class SerpApiClient:
         started = time.monotonic()
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.get(_SERPAPI_URL, params=params)
+                response = client.get(SERPAPI_URL, params=params)
             if response.status_code == 429:
                 raise SearchProviderError("rate_limited", "Web search rate limit reached.", retryable=True)
             if response.status_code in (401, 403):

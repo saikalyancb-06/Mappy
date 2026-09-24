@@ -93,7 +93,7 @@ def place_detail(poi_id: str, lat: float | None = None, lon: float | None = None
         candidate.open_detail = {k: v for k, v in status.items() if k != "status"}
     facts = []
     if candidate.destination_id:
-        facts = [hit.as_dict() for hit in retrieve(candidate.name, destination_id=candidate.destination_id, poi_ids=[candidate.id], limit=8).hits if hit.poi_id == candidate.id]
+        facts = [hit.as_dict() for hit in retrieve(candidate.name, destination_id=candidate.destination_id, poi_ids=[candidate.id], limit=8).hits if hit.poi_id == candidate.id and hit.category != "description"]
     advisories = [a for a in active_advisories(candidate.destination_id, now_local.date()) if a.get("poi_id") in (None, candidate.id)] if candidate.destination_id else []
     data = candidate.as_dict()
     data["distance_from_user_km"] = distance_from_user(geo, candidate.lat, candidate.lon)

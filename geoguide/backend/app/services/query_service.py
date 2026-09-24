@@ -306,6 +306,7 @@ class QueryService:
             state.extra["empty_message"] = "Which place do you mean? Open a place or mention its name."
             return
         state.entity = entity
+        entity.distance_km = distance_from_user(geo, entity.lat, entity.lon)  # a looked-up place is measured from the traveller, or not at all
         destination = destination_by_id(entity.destination_id)
         tz = destination.timezone if destination else None
         if entity.opening_hours:
@@ -344,7 +345,7 @@ class QueryService:
         if result:
             state.knowledge = [hit.as_dict() for hit in result.hits]
             state.trace.step("knowledge_retrieval", destination_id=destination_id, semantic_status=result.semantic_status, semantic_reason=result.semantic_reason, lexical_matches=result.lexical_matches, vector_matches=result.vector_matches, hits=[{"id": h.chunk_id, "scores": h.scores} for h in result.hits])
-            state.semantic_status = result.semantic_status
+            state.semantic_status, state.semantic_reason = result.semantic_status, result.semantic_reason
             for hit in result.hits:
                 state.evidence.add_knowledge(hit)
         weak = not result or not result.hits or max((h.scores.get("bm25", 0) for h in result.hits), default=0) < 1.0 and max((h.scores.get("vector", 0) for h in result.hits), default=0) < 0.45
@@ -481,7 +482,8 @@ def _notices(state: "_State") -> list[str]:
     if any(error.get("source") == "groq" for error in state.errors):
         notices.append("The language model was unavailable, so this answer was assembled directly from verified data.")
     if state.semantic_status and state.semantic_status != "ok":
-        notices.append("Semantic search is warming up; knowledge results use keyword matching for now.")
+        loading = "loading" in (state.semantic_reason or "")
+        notices.append("Semantic search is warming up; knowledge results use keyword matching for now." if loading else "Semantic search is unavailable; knowledge results use keyword matching.")
     return list(dict.fromkeys(notices))
 
 
@@ -506,6 +508,7 @@ class _State:
     extra: dict[str, Any] = field(default_factory=dict)
     needs: str | None = None
     semantic_status: str | None = None
+    semantic_reason: str | None = None
 
 
 query_service = QueryService()
