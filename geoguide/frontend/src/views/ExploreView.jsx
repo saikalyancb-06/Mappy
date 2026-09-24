@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, Plus, RefreshCw, UtensilsCrossed, Volume2 } from 'lucide-react'
+import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, Plus, RefreshCw, Sparkles, UtensilsCrossed, Volume2, X } from 'lucide-react'
 import { getCityBriefing, getCityContext, getEventsOverview, getHotels, getNearby } from '../api'
 import RichText from '../components/RichText'
 import SearchBox from '../components/SearchBox'
@@ -52,14 +52,28 @@ function DateBar({ selected, today, onChange }) {
   if (!selected) return null
   return <div className="date-bar-wrap">
     <div className="date-bar">
+      <button type="button" title="Previous week (-7d)" aria-label="Previous week" onClick={() => onChange(addDays(selected, -7))} className="date-step-btn"><span className="date-step-text">-7d</span></button>
       <button type="button" aria-label="Previous day" onClick={() => onChange(addDays(selected, -1))}><ChevronLeft size={18} /></button>
-      <label className="date-field"><CalendarDays size={16} /><input type="date" aria-label="Date" value={selected} onChange={(event) => event.target.value && onChange(event.target.value)} /></label>
+      <label className="date-field">
+        <CalendarDays size={16} />
+        <input
+          type="date"
+          aria-label="Date"
+          min="2026-01-01"
+          max="2026-12-31"
+          value={selected}
+          onChange={(event) => event.target.value && onChange(event.target.value)}
+        />
+      </label>
       <button type="button" aria-label="Next day" onClick={() => onChange(addDays(selected, 1))}><ChevronRight size={18} /></button>
+      <button type="button" title="Next week (+7d)" aria-label="Next week" onClick={() => onChange(addDays(selected, 7))} className="date-step-btn"><span className="date-step-text">+7d</span></button>
     </div>
-    <div className="chip-row">
+    <div className="chip-row judge-presets" aria-label="Quick jump date presets">
       <Chip active={selected === today} onClick={() => onChange(null)}>Today</Chip>
       <Chip active={selected === addDays(today, 1)} onClick={() => onChange(addDays(today, 1))}>Tomorrow</Chip>
-      <Chip active={selected === upcomingSaturday(today) && selected !== today} onClick={() => onChange(upcomingSaturday(today))}>This weekend</Chip>
+      <Chip active={selected === '2026-09-25'} onClick={() => onChange('2026-09-25')}><Sparkles size={13} style={{ marginRight: 4, verticalAlign: -2 }} />Festival Week (25 Sep)</Chip>
+      <Chip active={selected === '2026-10-15'} onClick={() => onChange('2026-10-15')}>Empty Week (15 Oct)</Chip>
+      <Chip active={selected === '2026-11-14'} onClick={() => onChange('2026-11-14')}>Heritage Walk (14 Nov)</Chip>
     </div>
   </div>
 }
@@ -99,6 +113,7 @@ export default function ExploreView({ context, online = true, language, selected
     return () => window.clearTimeout(t)
   }, [mode, loadFood, loadHotels])
 
+  const [openSource, setOpenSource] = useState(null)
   const briefingKey = `${ctx.data?.city?.key}|${ctx.data?.date?.selected}|${language}`
   const data = ctx.data && aiBriefing?.key === briefingKey ? { ...ctx.data, briefing: aiBriefing.briefing } : ctx.data
   const city = data?.city
@@ -132,7 +147,7 @@ export default function ExploreView({ context, online = true, language, selected
     {data && mode === 'overview' && <>
       <section className={`briefing-card ${ctx.loading ? 'is-stale' : ''}`}>
         <div className="verified-row"><span className="verified-dot" /> Briefing for {dateLabel}<span className="verified-badge">{data.briefing.pending ? 'Verified data · AI summary on the way' : data.briefing.mode === 'deterministic' ? 'From verified data' : 'Grounded AI summary'}</span></div>
-        <RichText text={data.briefing.text} sources={data.briefing.sources} />
+        <RichText text={data.briefing.text} sources={data.briefing.sources} onCite={setOpenSource} />
         <button type="button" className="secondary-button listen-button" onClick={speak}><Volume2 size={16} /> Listen</button>
       </section>
 
@@ -146,7 +161,7 @@ export default function ExploreView({ context, online = true, language, selected
       <OfflineCard destination={context.destination} online={online} />
 
       <SectionTitle eyebrow="🧳 Local tips">For {formatDay(selected, false)}</SectionTitle>
-      <TipList tips={data.tips} />
+      <TipList tips={data.tips} onCite={setOpenSource} />
 
       {data.about.length > 0 && <>
         <SectionTitle eyebrow="About this place" action={<button type="button" className="link-button" onClick={() => setMode('history')}>Read more</button>}>History & significance</SectionTitle>
@@ -212,8 +227,9 @@ export default function ExploreView({ context, online = true, language, selected
     {data && (mode === 'history' || mode === 'culture') && <>
       {(mode === 'history' ? data.about : data.culture).length === 0 && <StateMessage title="No stored background" body={`GeoGuide has no curated ${mode} notes for ${city.name} yet. Ask GeoGuide to search the web.`} />}
       {(mode === 'history' ? data.about : data.culture).map((hit) => <article key={hit.chunk_id} className="knowledge-card"><span className="category-label">{titleCase(hit.category)}</span><h3>{hit.title}</h3><p>{hit.content}</p><small>Source: {hit.source}</small></article>)}
-      {mode === 'culture' && <><SectionTitle eyebrow="For this date">Local tips</SectionTitle><TipList tips={data.tips} /></>}
+      {mode === 'culture' && <><SectionTitle eyebrow="For this date">Local tips</SectionTitle><TipList tips={data.tips} onCite={setOpenSource} /></>}
     </>}
+    {openSource && <div className="source-sheet" role="dialog" aria-label="Cited Source"><button type="button" className="context-clear" aria-label="Close source" onClick={() => setOpenSource(null)}><X size={14} /></button><span className="eyebrow">{titleCase(openSource.source_type)} · {openSource.source || 'GeoGuide source record'}</span><strong>{openSource.title}</strong><p>{openSource.content}</p>{openSource.source_url && <a href={openSource.source_url} target="_blank" rel="noopener noreferrer">Open verified source</a>}{openSource.retrieved_at && <small>Retrieved {openSource.retrieved_at.slice(0, 16).replace('T', ' ')}</small>}</div>}
     {submitting && events.data?.city && <EventSubmitSheet city={events.data.city} onClose={() => setSubmitting(false)} />}
   </div>
 }

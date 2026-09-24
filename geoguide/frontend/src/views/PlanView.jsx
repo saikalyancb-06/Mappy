@@ -5,6 +5,7 @@ import { downloadFile, mapsRouteUrl, planSummary, planToIcs, shareText } from '.
 import SearchBox from '../components/SearchBox'
 import SwipeDeck from '../components/SwipeDeck'
 import FeedbackSheet from '../components/FeedbackSheet'
+import VoiceInputButton from '../components/VoiceInputButton'
 import { Chip, Notices, SectionTitle, StateMessage, Understood } from '../components/ui'
 import { formatDistance, formatMinutes, formatMoney, titleCase } from '../format'
 
@@ -86,9 +87,22 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
   const totals = plan?.totals
   return <div className="view-content">
     <header className="simple-header"><div><span className="eyebrow">Shape the day{context.destination ? ` · ${context.destination.name}` : ''}</span><h1>Your plan</h1></div><span className="status-pill">{plan ? (plan.replanned ? 'Re-optimised' : titleCase(plan.preset)) : 'Draft'}</span></header>
-    <label className="wishes-box"><span className="eyebrow">What would you like to do?</span>
-      <textarea value={wishes} onChange={(event) => { setWishes(event.target.value); resetDeck() }} rows={3} placeholder="Tell GeoGuide in your words — places you want, things to avoid, budget, time…" />
-    </label>
+    <div className="wishes-box-wrap">
+      <label className="wishes-box">
+        <div className="wishes-header">
+          <span className="eyebrow">What would you like to do?</span>
+          <VoiceInputButton
+            compact
+            onTranscript={(queryText) => {
+              setWishes(queryText)
+              resetDeck()
+            }}
+            buttonLabel="Speak wishes"
+          />
+        </div>
+        <textarea value={wishes} onChange={(event) => { setWishes(event.target.value); resetDeck() }} rows={3} placeholder="Tell GeoGuide in your words — places you want, things to avoid, budget, time…" />
+      </label>
+    </div>
     <div className="chip-row">{EXAMPLES.map((text) => <Chip key={text} onClick={() => { setWishes(text); resetDeck() }}>{text}</Chip>)}</div>
     <div className="chip-row">{durations.map((key) => <Chip key={key} active={duration === key} onClick={() => setDuration(key)}>{DURATION_LABELS[key] || key}</Chip>)}</div>
     <div className="chip-row"><Chip active={dayOffset === 0} onClick={() => setDayOffset(0)}>Starting now</Chip><Chip active={dayOffset === 1} onClick={() => setDayOffset(1)}>Tomorrow 8:00</Chip></div>

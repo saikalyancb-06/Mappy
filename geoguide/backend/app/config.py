@@ -51,6 +51,14 @@ LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "25"))
 # Use the LLM to refine query understanding when the rule parser is unsure.
 LLM_QUERY_PARSING = _bool("LLM_QUERY_PARSING", True)
 
+# Speech recognition (Hugging Face Whisper Large-v3)
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "openai/whisper-large-v3")
+HF_PROVIDER = os.getenv("HF_PROVIDER", "hf-inference")
+SPEECH_TIMEOUT_SECONDS = float(os.getenv("SPEECH_TIMEOUT_SECONDS", "30"))
+SPEECH_MAX_FILE_SIZE_BYTES = int(os.getenv("SPEECH_MAX_FILE_SIZE_BYTES", str(15 * 1024 * 1024)))  # 15 MB
+SPEECH_MAX_DURATION_SECONDS = float(os.getenv("SPEECH_MAX_DURATION_SECONDS", "120"))  # 2 minutes
+
 # Web search (SerpApi)
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 SERPAPI_URL = os.getenv("SERPAPI_URL", "https://serpapi.com/search.json")

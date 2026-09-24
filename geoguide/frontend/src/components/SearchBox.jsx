@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MapPinned, Search, X } from 'lucide-react'
 import { searchPlaces } from '../api'
 import { formatDistance, titleCase } from '../format'
+import VoiceInputButton from './VoiceInputButton'
 
 // Search a place, hotel, destination or category the traveller has heard of.
 // Stored data first; the backend adds live search when stored matches are weak.
@@ -34,7 +35,18 @@ export default function SearchBox({ context, placeholder = 'Search a place, hote
   const clear = () => { setQuery(''); setResult(null); setError('') }
   const open = query.trim().length >= 2 && (result || busy || error)
   return <div className="search-box">
-    <label className="search-input"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={placeholder} aria-label="Search places" />{query && <button type="button" aria-label="Clear search" onClick={clear}><X size={15} /></button>}</label>
+    <div className="search-input-row">
+      <label className="search-input">
+        <Search size={17} />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={placeholder} aria-label="Search places" />
+        {query && <button type="button" aria-label="Clear search" onClick={clear}><X size={15} /></button>}
+      </label>
+      <VoiceInputButton
+        compact
+        onTranscript={(recognizedText) => setQuery(recognizedText)}
+        buttonLabel="Voice search"
+      />
+    </div>
     {open && <div className="search-results" role="listbox">
       {busy && <p className="muted-text">Searching…</p>}
       {error && <p className="form-error">{error}</p>}

@@ -11,3 +11,5 @@ sentence-transformers==3.2.1
 # PostgreSQL + PostGIS + pgvector (optional; SQLite is used when DATABASE_URL is sqlite)
 psycopg[binary]==3.2.3
 pytest==8.3.3
+huggingface-hub>=0.24.0
+python-multipart>=0.0.9

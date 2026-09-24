@@ -57,11 +57,17 @@ const request = async (path, options = {}) => {
 
 const send = async (path, options = {}) => {
   const token = getToken()
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const headers = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  }
   let response
   try {
     response = await fetch(path, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+      headers,
     })
   } catch {
     // No network: answer from a saved offline city pack when there is one.
@@ -156,6 +162,16 @@ export const getHotels = (context, { origin = 'auto', sort = 'best', checkIn, ni
 export const searchPlaces = (context, q, kind = null) => request(`/api/search${contextParams(context, { q, kind })}`)
 export const getSimilarPlaces = (id) => request(`/api/places/${encodeURIComponent(id)}/similar`)
 export const getPlace = (id, context) => request(`/api/places/${encodeURIComponent(id)}${contextParams({ userLocation: context?.userLocation })}`)
+
+export const transcribeAudio = async (audioBlob, { targetLanguage = 'en', filename = 'recording.webm' } = {}) => {
+  const formData = new FormData()
+  formData.append('audio', audioBlob, filename)
+  formData.append('target_language', targetLanguage)
+  return request('/api/speech/transcribe', {
+    method: 'POST',
+    body: formData,
+  })
+}
 
 export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug, date }) => request('/api/ask', {
   method: 'POST',

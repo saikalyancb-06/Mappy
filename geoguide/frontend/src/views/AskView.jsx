@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bug, Mic, Send, Sparkles, Volume2, X } from 'lucide-react'
 import { askGeoGuide } from '../api'
 import RichText from '../components/RichText'
+import VoiceInputButton from '../components/VoiceInputButton'
 import { Chip, ConfidenceBadge, EventCard, IconCircleButton, PlaceFacts } from '../components/ui'
 import { formatDay, formatDistance, titleCase } from '../format'
 
@@ -72,7 +73,14 @@ export default function AskView({ context, selectedDate, onClearDate, language, 
     <header className="simple-header"><div><span className="eyebrow">Grounded answers</span><h1>Ask GeoGuide</h1></div>
       <div className="header-actions">
         {debugAvailable && <IconCircleButton label={debug ? 'Hide retrieval trace' : 'Show retrieval trace'} variant={debug ? 'dark' : 'light'} onClick={() => setDebug((value) => !value)}><Bug size={18} /></IconCircleButton>}
-        <IconCircleButton label={listening ? 'Listening…' : 'Voice input'} onClick={listen} disabled={!Recognition || listening}><Mic size={20} /></IconCircleButton>
+        <VoiceInputButton
+          compact
+          onTranscript={(queryText, speechResult) => {
+            setQuestion(queryText)
+            send(queryText)
+          }}
+          buttonLabel="Whisper voice input"
+        />
       </div>
     </header>
     {selectedDate && <div className="selected-place"><span>Answering for <strong>{formatDay(selectedDate)}</strong> (from Explore)</span><button type="button" aria-label="Use today instead" onClick={onClearDate}><X size={14} /></button></div>}
@@ -103,6 +111,19 @@ export default function AskView({ context, selectedDate, onClearDate, language, 
       <div ref={endRef} />
     </div>
     {openSource && <div className="source-sheet" role="dialog" aria-label="Source"><button type="button" className="context-clear" aria-label="Close source" onClick={() => setOpenSource(null)}><X size={14} /></button><span className="eyebrow">{titleCase(openSource.source_type)} · {openSource.source || 'GeoGuide data'}</span><strong>{openSource.title}</strong><p>{openSource.content}</p>{openSource.source_url && <a href={openSource.source_url} target="_blank" rel="noopener noreferrer">Open source</a>}{openSource.retrieved_at && <small>Retrieved {openSource.retrieved_at.slice(0, 16).replace('T', ' ')}</small>}</div>}
-    <form className="ask-composer" onSubmit={(event) => { event.preventDefault(); send() }}><input aria-label="Ask GeoGuide" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={selectedPlace ? `Ask about ${selectedPlace.name}…` : 'Ask about places, timing, weather…'} /><button aria-label="Send question" className="send-button" disabled={sending || !question.trim()} type="submit"><Send size={18} /></button></form>
+    <div className="ask-composer-wrap">
+      <form className="ask-composer" onSubmit={(event) => { event.preventDefault(); send() }}>
+        <input aria-label="Ask GeoGuide" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={selectedPlace ? `Ask about ${selectedPlace.name}…` : 'Ask about places, timing, weather…'} />
+        <VoiceInputButton
+          compact
+          onTranscript={(queryText) => {
+            setQuestion(queryText)
+            send(queryText)
+          }}
+          buttonLabel="Voice question"
+        />
+        <button aria-label="Send question" className="send-button" disabled={sending || !question.trim()} type="submit"><Send size={18} /></button>
+      </form>
+    </div>
   </div>
 }

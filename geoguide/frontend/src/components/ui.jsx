@@ -197,7 +197,23 @@ export function EventCard({ event }) {
   </article>
 }
 
-export function TipList({ tips }) {
+export function TipList({ tips, onCite }) {
   if (!tips?.length) return <p className="muted-text">No tips for this date from the available data.</p>
-  return <ul className="tip-list">{tips.map((tip) => <li key={tip.id} className={`tip-${tip.kind}`}><Lightbulb size={15} /><div><p>{tip.text}</p><small>Based on: {tip.basis}</small></div></li>)}</ul>
+  return <ul className="tip-list">{tips.map((tip) => <li key={tip.id} className={`tip-${tip.kind}`}>
+    <Lightbulb size={15} />
+    <div>
+      <p>{tip.text}</p>
+      <small>
+        Based on: {tip.basis}
+        {tip.source && (
+          tip.source_url ? (
+            <> · <a href={tip.source_url} target="_blank" rel="noopener noreferrer" className="tip-source-link">{tip.source}</a></>
+          ) : (
+            <> · <span className="tip-source-text">{tip.source}</span></>
+          )
+        )}
+      </small>
+    </div>
+  </li>)}</ul>
 }
+
