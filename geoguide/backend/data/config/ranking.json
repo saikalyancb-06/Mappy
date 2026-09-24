@@ -1,5 +1,5 @@
 {
-  "_comment": "Ranking, dedup and entity-resolution weights. Tuned against tests/eval; change here, not in code.",
+  "_comment": "Ranking, dedup and entity-resolution weights. Tuned against tests/eval; change here, not in code. 'vibe' = match with the traveller's feedback-derived vibe preferences (user-specific); 'community' = visitors' shrunk average rating (place-level). Both are 0.5 without evidence.",
   "profiles": {
     "nearby": {
       "relevance": 0.3,
@@ -8,7 +8,9 @@
       "open": 0.1,
       "preference": 0.1,
       "weather": 0.0,
-      "source_confidence": 0.05
+      "source_confidence": 0.05,
+      "vibe": 0.05,
+      "community": 0.05
     },
     "discovery": {
       "relevance": 0.3,
@@ -17,7 +19,9 @@
       "open": 0.1,
       "preference": 0.2,
       "weather": 0.05,
-      "source_confidence": 0.05
+      "source_confidence": 0.05,
+      "vibe": 0.1,
+      "community": 0.05
     },
     "itinerary": {
       "relevance": 0.25,
@@ -26,7 +30,9 @@
       "open": 0.15,
       "preference": 0.25,
       "weather": 0.05,
-      "source_confidence": 0.05
+      "source_confidence": 0.05,
+      "vibe": 0.1,
+      "community": 0.05
     },
     "lookup": {
       "relevance": 0.6,
@@ -35,7 +41,9 @@
       "open": 0.0,
       "preference": 0.0,
       "weather": 0.0,
-      "source_confidence": 0.15
+      "source_confidence": 0.15,
+      "vibe": 0.0,
+      "community": 0.0
     },
     "stays": {
       "relevance": 0.1,
@@ -44,7 +52,9 @@
       "open": 0.0,
       "preference": 0.25,
       "weather": 0.0,
-      "source_confidence": 0.05
+      "source_confidence": 0.05,
+      "vibe": 0.05,
+      "community": 0.1
     }
   },
   "intent_profile": {

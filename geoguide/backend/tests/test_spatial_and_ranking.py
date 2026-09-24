@@ -70,7 +70,7 @@ def test_weather_prefers_sheltered_places_in_heat():
 def test_every_ranked_candidate_explains_its_score():
     result = rank([_candidate("a", 10.0, 20.0, rating=4.6, review_count=900)], RankRequest(reference=(10.0, 20.0), reference_label="Old Fort", radius_km=5))
     ranked = result.ranked[0]
-    assert set(ranked.scores) == {"relevance", "geographic", "quality", "open", "preference", "weather", "source_confidence"}
+    assert set(ranked.scores) == {"relevance", "geographic", "quality", "open", "preference", "weather", "source_confidence", "vibe", "community"}
     assert any("Rated 4.6" in reason for reason in ranked.reasons)
 
 

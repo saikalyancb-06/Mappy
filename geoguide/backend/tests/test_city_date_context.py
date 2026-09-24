@@ -12,7 +12,9 @@ from sqlalchemy import delete
 from app.core.dates import parse_range, single, weekend_of
 from app.db.models import EventFestival, WeatherDaily
 from app.db.session import SessionLocal
-from app.events.live import listing_dates, refresh_live_events
+from app.events.extract import listing_dates
+from app.events.providers.google_events import GoogleEventsProvider
+from app.events.providers.stored import StoredEventProvider
 from app.events.service import NONE, city_events
 from app.events.store import classify
 from app.geo.city import resolve_city
@@ -84,8 +86,8 @@ def test_listing_dates_are_read_or_dropped():
 
 
 @pytest.mark.parametrize("title, expected", [
-    ("Deepavali at the Fort", ("festival", "festival")), ("Monsoon Music Nights", ("live", "music")),
-    ("City Marathon", ("live", "sports")), ("Craft Mela", ("live", "arts")), ("Street Food Week", ("live", "food")),
+    ("Deepavali at the Fort", ("festival", "festivals")), ("Monsoon Music Nights", ("event", "music")),
+    ("City Marathon", ("event", "sports")), ("Craft Mela", ("event", "art")), ("Street Food Week", ("event", "food")),
 ])
 def test_event_classification(title, expected):
     assert classify(title) == expected
@@ -149,7 +151,11 @@ def _listing(title, start, when=None, venue=None):
     return SearchResult(title=title, url="https://listings.example/" + title.replace(" ", "-"), snippet=f"{title} details", source="listings.example", engine="google_events", event_start=start, event_date=when or start, venue_name=venue)
 
 
-def test_live_listings_keep_only_dated_matches_and_store_evidence():
+def _live(fake):
+    return [StoredEventProvider(), GoogleEventsProvider(fake)]
+
+
+def test_live_listings_keep_only_dated_matches_with_evidence_and_are_not_persisted():
     day = TODAY + timedelta(days=3)
     label = day.strftime("%b ") + str(day.day)
     fake = FakeEvents([
@@ -157,27 +163,29 @@ def test_live_listings_keep_only_dated_matches_and_store_evidence():
         _listing("Far Future Expo", (day + timedelta(days=40)).strftime("%b ") + str((day + timedelta(days=40)).day)),
         _listing("Mystery Gig", None, "Dates to be announced"),
     ])
-    statuses = refresh_live_events(_testville(), single(day), TODAY, web=fake)
-    serp = next(s for s in statuses if s["source"].startswith("Google Events"))
-    assert (serp["found"], serp["kept"], serp["undated"]) == (3, 1, 1)
-    result = city_events(_testville(), single(day), today=TODAY, live=False)
+    result = city_events(_testville(), single(day), providers=_live(fake))
+    serp = next(s for s in result["sources_checked"] if s["provider"] == "google_events")
+    assert serp["found"] == 3 and serp["dropped"] == {"no_date": 1} and result["counts"]["out_of_range"] == 1
     jazz = next(e for e in result["events"] if e["name"] == "Jazz on the Ghats")
-    assert jazz["category"] == "music" and jazz["venue"]["name"] == "Ghat Stage"
-    assert jazz["source"]["kind"] == "live" and jazz["source"]["last_verified_at"] and jazz["source"]["url"].startswith("https://listings.example/")
+    assert jazz["category"] == "music" and jazz["venue"]["name"] == "Ghat Stage" and jazz["start_time"] == "19:00"
+    assert jazz["source"]["provider"] == "google_events" and jazz["source"]["retrieved_at"] and jazz["source"]["url"].startswith("https://listings.example/")
+    # Live listings are short-lived cache, not permanent records.
+    assert "Jazz on the Ghats" not in [e["name"] for e in city_events(_testville(), single(day), live=False)["events"]]
 
 
-def test_live_listing_duplicating_a_stored_record_is_not_added_again():
+def test_live_listing_of_a_stored_event_is_merged_not_duplicated():
     label = FEST_DAY.strftime("%b ") + str(FEST_DAY.day)
-    refresh_live_events(_testville(), single(FEST_DAY), TODAY, web=FakeEvents([_listing("Lantern Festival", label)]))
-    names = [e["name"] for e in city_events(_testville(), single(FEST_DAY), today=TODAY, live=False)["events"]]
-    assert names.count("Lantern Festival") == 1
+    result = city_events(_testville(), single(FEST_DAY), providers=_live(FakeEvents([_listing("Lantern Festival", label, f"{label}, 6 – 9 PM")])))
+    lantern = [e for e in result["events"] if e["name"] == "Lantern Festival"]
+    assert len(lantern) == 1 and result["counts"]["duplicates"] == 1
+    assert len(lantern[0]["sources"]) == 2 and "Reported by 2 sources" in lantern[0]["confidence_notes"]
 
 
 def test_past_dates_skip_live_listings_and_unconfigured_search_is_reported():
-    past = refresh_live_events(_testville(), single(TODAY - timedelta(days=30)), TODAY, web=FakeEvents([]))
-    assert past[0]["status"] == "not_applicable"
-    statuses = refresh_live_events(_testville(), single(TODAY + timedelta(days=5)), TODAY, web=SerpApiClient(api_key=""))
-    assert {s["source"]: s["status"] for s in statuses}["Google Events (SerpApi)"] == "not_configured"
+    past = city_events(_testville(), single(TODAY - timedelta(days=30)), providers=_live(FakeEvents([])))
+    assert {s["provider"]: s["status"] for s in past["sources_checked"]}["google_events"] == "not_applicable"
+    unconfigured = city_events(_testville(), single(TODAY + timedelta(days=5)), providers=_live(SerpApiClient(api_key="")))
+    assert {s["provider"]: s["status"] for s in unconfigured["sources_checked"]}["google_events"] == "not_configured"
 
 
 # ---- weather for a date ----------------------------------------------------------------------

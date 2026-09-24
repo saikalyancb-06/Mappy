@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, MessageCircle, Navigation } from 'lucide-react'
-import { getPlace } from '../api'
+import { ChevronLeft, MessageCircle, Navigation, Star } from 'lucide-react'
+import { getPlace, getPlaceCommunity } from '../api'
+import FeedbackSheet from '../components/FeedbackSheet'
 import { AdvisoryList, ConfidenceList, ConflictNote, IconCircleButton, PlaceFacts, SourceBadge, WhyBars } from '../components/ui'
 import { formatMoney, mapsLink, titleCase } from '../format'
 
 export default function PlaceDetailView({ place: initial, context, saved, onSave, onBack, onAsk }) {
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
+  const [community, setCommunity] = useState(null)
+  const [rating, setRating] = useState(false)
   const storedPlace = !initial.id.startsWith('web-')
+
+  useEffect(() => {
+    if (!storedPlace) return
+    getPlaceCommunity(initial.id).then(setCommunity).catch(() => setCommunity(null))
+  }, [initial.id, storedPlace])
 
   useEffect(() => {
     if (!storedPlace) return
@@ -29,6 +37,14 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
       {(place.reasons?.length > 0 || place.bars) && <><h2>Why this place</h2><WhyBars bars={place.bars} />{place.reasons?.length > 0 && <ul className="reason-list">{place.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}</>}
       {place.confidence_detail?.parts && <><h2>How reliable is this? <span className={`conf-${place.confidence_detail.label}`}>{titleCase(place.confidence_detail.label)}</span></h2><ConfidenceList detail={place.confidence_detail} /></>}
       {place.description && <><h2>About</h2><p>{place.description}</p></>}
+      <button type="button" className="secondary-button full-width" onClick={() => setRating(true)}><Star size={16} /> How was this place?</button>
+      {community?.from_feedback && <section className="community-card">
+        <h2>What visitors say</h2>
+        <p className="muted-text">{community.feedback_count} review{community.feedback_count === 1 ? '' : 's'}{community.rating ? ` · ${community.rating.toFixed(1)}/5` : ''} · opinions, not verified facts{community.synthetic_share ? ' · includes synthetic sample data' : ''}</p>
+        {community.top_vibes?.length > 0 && <div className="chip-row wrap">{community.top_vibes.map((vibe) => <span key={vibe.key} className="chip static">{vibe.label}</span>)}</div>}
+        {community.reported?.length > 0 && <p className="muted-text">Often mentioned: {community.reported.map((item) => `${item.label.toLowerCase()} (${Math.round(item.share * 100)}%)`).join(' · ')}</p>}
+        {community.recent?.map((quote, index) => <blockquote key={index}>“{quote.text}”<small>{'★'.repeat(quote.rating)} · {quote.date}{quote.synthetic ? ' · sample' : ''}</small></blockquote>)}
+      </section>}
       {detail?.facts?.length > 0 && <><h2>Good to know</h2><ul className="fact-list">{detail.facts.map((fact) => <li key={fact.chunk_id}>{fact.content.replace(`${place.name}: `, '')}<span className="fact-source">{fact.source}</span></li>)}</ul></>}
       <h2>Practical details</h2>
       <dl className="detail-grid">
@@ -59,5 +75,6 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
         {link ? <a className="primary-button" href={link} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> Navigate</a> : <button className="primary-button" disabled type="button">No map location</button>}
       </div>
     </section>
+    {rating && <FeedbackSheet place={place} onClose={() => setRating(false)} onSaved={(saved) => saved.community && setCommunity((current) => ({ ...(current || {}), ...saved.community, recent: current?.recent || [] }))} />}
   </div>
 }

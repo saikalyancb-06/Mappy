@@ -62,7 +62,8 @@ class Candidate:
     detour_min: int | None = None  # route-aware suggestions
     conflicts: list[dict[str, str]] = field(default_factory=list)  # material disagreements between merged sources
     confidence_detail: dict[str, Any] = field(default_factory=dict)
-    bars: dict[str, float] = field(default_factory=dict)  # what this place costs this traveller and whether it fits their budget
+    bars: dict[str, float] = field(default_factory=dict)  # "Why this place" bars
+    community: dict[str, Any] = field(default_factory=dict)  # visitor feedback signals (opinions, not facts)
     opening_hours: dict[str, Any] | None = None
     opening_hours_text: str | None = None
     open_status: str = "unknown"  # open | closed | unknown

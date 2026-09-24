@@ -7,6 +7,8 @@ breakdown and data-backed reasons so "why this place?" is answerable.
 """
 from __future__ import annotations
 
+import logging
+
 import math
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,8 +19,12 @@ from app.core.text import tokens
 from app.geo import opening_hours
 from app.geo.distance import haversine_km, valid_coordinates
 from app.models import Candidate
+from app.feedback.signals import community_quality, place_communities, user_vibes, vibe_compatibility
 from app.ranking.confidence import assess, bars
 from app.services.cost import cost_for_user, to_decimal
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,6 +52,7 @@ class RankRequest:
     within_budget: bool = False  # hard: only places that fit the traveller's budget
     constraints: Any = None  # app.query.constraints.Constraints
     travel_origin: tuple[float, float] | None = None  # where travel time is measured from
+    use_feedback: bool = True  # vibe + community signals (off only for before/after analytics)
 
 
 @dataclass
@@ -244,6 +251,15 @@ def _format_distance(km: float) -> str:
     return f"{int(round(km * 1000, -1))} m" if km < 1 else f"{km:.1f} km"
 
 
+def _feedback_signals(candidates: list[Candidate], user: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+    """Community signals for the candidates and the traveller's vibe profile; neutral if unavailable."""
+    try:
+        return place_communities(candidates), user_vibes(user.get("user_id"), user)
+    except Exception as exc:  # feedback is an extra signal: never let it break ranking
+        logger.warning("feedback_signals_unavailable error=%s", type(exc).__name__)
+        return {}, user_vibes(None, None)
+
+
 def rank(candidates: list[Candidate], request: RankRequest) -> RankResult:
     config = load_rules("ranking")
     weights = config["profiles"].get(request.profile_name) or config["profiles"]["discovery"]
@@ -254,6 +270,7 @@ def rank(candidates: list[Candidate], request: RankRequest) -> RankResult:
     constraints = request.constraints
     mode = (constraints.travel_mode if constraints and constraints.travel_mode else None) or request.user.get("travel_mode") or None
     origin = request.travel_origin or request.user_point or request.reference
+    communities, traveller = _feedback_signals(candidates, request.user or {}) if request.use_feedback else ({}, None)
     for candidate in candidates:
         candidate.cost_for_user = cost_for_user(candidate, request.user or {})
         if origin and candidate.lat is not None:
@@ -278,6 +295,12 @@ def rank(candidates: list[Candidate], request: RankRequest) -> RankResult:
         else:
             geographic = 0.5
         source_score = max((source_conf.get(s.source_type, 0.5) for s in candidate.sources), default=0.5)
+        community = communities.get(candidate.id)
+        vibe_score, vibe_reasons, community_score, community_reasons = 0.5, [], 0.5, []
+        if community is not None:
+            vibe_score, vibe_reasons, _ = vibe_compatibility(community, traveller)
+            community_score, community_reasons = community_quality(community)
+            candidate.community = {"from_feedback": community.from_feedback, "feedback_count": community.feedback_count, "rating": community.bayes_rating, "top_vibes": community.top_vibes(3, 0.5 if community.from_feedback else 0.45), "synthetic_share": community.synthetic_share}
         scores = {
             "relevance": relevance,
             "geographic": geographic,
@@ -286,10 +309,12 @@ def rank(candidates: list[Candidate], request: RankRequest) -> RankResult:
             "preference": preference,
             "weather": weather,
             "source_confidence": source_score,
+            "vibe": vibe_score,
+            "community": community_score,
         }
         candidate.scores = {key: round(value, 3) for key, value in scores.items()}
         candidate.score = round(sum(weights.get(key, 0.0) * value for key, value in scores.items()), 4)
-        reasons = relevance_reasons + preference_reasons + open_reasons + weather_reasons
+        reasons = relevance_reasons + preference_reasons + vibe_reasons + open_reasons + weather_reasons + community_reasons
         if candidate.distance_km is not None and request.reference_label:
             reasons.append(f"{_format_distance(candidate.distance_km)} from {request.reference_label}")
         if candidate.star_rating:

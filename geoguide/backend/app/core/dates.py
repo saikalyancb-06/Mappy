@@ -26,7 +26,7 @@ class DateRange:
     start: date
     end: date
     label: str  # human wording, e.g. "Sat 26 – Sun 27 Sep 2026"
-    kind: str = "day"  # day | weekend | week | month | range
+    kind: str = "day"  # day | tonight | weekend | week | month | trip | upcoming | range
 
     def contains(self, day: date) -> bool:
         return self.start <= day <= self.end
@@ -101,9 +101,21 @@ def parse_day(text: str, anchor: date) -> date | None:
     return None
 
 
-def parse_range(text: str, anchor: date) -> DateRange | None:
-    """The date range a question refers to, resolved against the selected date."""
+def parse_range(text: str, anchor: date, trip: tuple[date, date] | None = None) -> DateRange | None:
+    """The date range a question refers to, resolved against the selected date.
+
+    ``trip`` is the traveller's trip dates, for "during my trip" / "while I'm here".
+    """
     lowered = (text or "").lower()
+    if re.search(r"\b(?:during|on|for)\s+(?:my|our|the)\s+(?:trip|stay|visit|holiday|vacation)\b|\bwhile\s+(?:i'?m|i am|we'?re|we are)\s+(?:here|there|in town)\b", lowered):
+        if trip:
+            return DateRange(trip[0], trip[1], fmt_range(trip[0], trip[1]), "trip")
+        return DateRange(anchor, anchor + timedelta(days=6), fmt_range(anchor, anchor + timedelta(days=6)), "trip")
+    if re.search(r"\btonight\b|\bthis\s+evening\b", lowered):
+        return DateRange(anchor, anchor, f"tonight, {fmt_day(anchor)}", "tonight")
+    if re.search(r"\bupcoming\b|\bcoming\s+up\b|\bsoon\b", lowered):
+        end = anchor + timedelta(days=29)
+        return DateRange(anchor, end, fmt_range(anchor, end), "upcoming")
     if re.search(r"\b(?:this|the)\s+weekend\b|\bweekend\b", lowered):
         base = anchor + timedelta(days=7) if re.search(r"\bnext\s+weekend\b", lowered) else anchor
         return weekend_of(base)
@@ -129,6 +141,6 @@ def parse_range(text: str, anchor: date) -> DateRange | None:
         index = MONTHS[month.group("m").lower()]
         year = int(month.group("y")) if month.group("y") else (anchor.year if index >= anchor.month else anchor.year + 1)
         return month_of(year, index)
-    if re.search(r"\b(?:today|tonight|now|right now|currently|at the moment|happening here)\b", lowered):
+    if re.search(r"\b(?:today|now|right now|currently|at the moment|happening here)\b", lowered):
         return single(anchor)
     return None

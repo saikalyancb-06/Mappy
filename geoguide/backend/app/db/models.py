@@ -338,3 +338,163 @@ class ItineraryItem(Base):
     start_time = Column(String, nullable=True)
     end_time = Column(String, nullable=True)
     locked = Column(Boolean, default=False)
+
+
+# ---- Feedback & vibe intelligence ------------------------------------------------------------
+# Community signals (vibes, crowding, value…) are probabilistic and user-generated; they live here,
+# separate from place facts (address, hours, coordinates, category) in the pois table.
+
+
+class Vibe(Base):
+    """Controlled vibe vocabulary (synced from config) plus custom vibes users typed under "Other"."""
+
+    __tablename__ = "vibes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, unique=True, nullable=False)
+    label = Column(String, nullable=False)
+    emoji = Column(String, nullable=True)
+    origin = Column(String, nullable=False, default="controlled")  # controlled | custom
+    status = Column(String, nullable=False, default="active")  # active | pending (custom, not yet used in ranking) | blocked
+    use_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Aspect(Base):
+    """Liked / disliked characteristics ("Good views", "Too crowded"…)."""
+
+    __tablename__ = "aspects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, unique=True, nullable=False)
+    label = Column(String, nullable=False)
+    polarity = Column(String, nullable=False)  # positive | negative
+    origin = Column(String, nullable=False, default="controlled")
+    status = Column(String, nullable=False, default="active")
+    created_at = Column(DateTime, default=utcnow)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=True, index=True)
+    place_id = Column(String, nullable=False, index=True)
+    place_name = Column(String, nullable=True)
+    city = Column(String, nullable=True)
+    destination_id = Column(String, nullable=True, index=True)
+    category = Column(String, nullable=True)
+    visit_date = Column(String, nullable=True)  # ISO date
+    overall_rating = Column(Integer, nullable=False)  # 1..5
+    recommendation = Column(String, nullable=False)  # loved_it | good | okay | didnt_like | avoid
+    crowd_level = Column(String, nullable=True)
+    price_level = Column(String, nullable=True)
+    ambience_score = Column(Integer, nullable=True)
+    cleanliness_score = Column(Integer, nullable=True)
+    service_score = Column(Integer, nullable=True)
+    accessibility_score = Column(Integer, nullable=True)
+    photo_worthiness = Column(Integer, nullable=True)
+    text_feedback = Column(Text, nullable=True)  # the traveller's words, stored as written
+    sentiment = Column(String, nullable=True)  # positive | neutral | mixed | negative (derived)
+    sentiment_score = Column(Float, nullable=True)
+    derived = Column(Text, nullable=True)  # JSON: what text analysis found (aspects, vibes, descriptors); never overrides selections
+    derived_vibe_scores = Column(Text, nullable=True)  # JSON: vibe → weight this feedback contributes
+    is_synthetic = Column(Boolean, nullable=False, default=False)
+    source = Column(String, nullable=False, default="user")  # user | synthetic_bootstrap
+    created_at = Column(DateTime, default=utcnow, index=True)
+
+
+class FeedbackVibe(Base):
+    __tablename__ = "feedback_vibes"
+    __table_args__ = (UniqueConstraint("feedback_id", "vibe_id", name="uq_feedback_vibe"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    feedback_id = Column(String, nullable=False, index=True)
+    vibe_id = Column(Integer, nullable=False, index=True)
+    origin = Column(String, nullable=False, default="selected")  # selected (authoritative) | derived (from text) | custom
+    weight = Column(Float, nullable=False, default=1.0)
+
+
+class FeedbackAspect(Base):
+    __tablename__ = "feedback_aspects"
+    __table_args__ = (UniqueConstraint("feedback_id", "aspect_id", name="uq_feedback_aspect"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    feedback_id = Column(String, nullable=False, index=True)
+    aspect_id = Column(Integer, nullable=False, index=True)
+    origin = Column(String, nullable=False, default="selected")
+    weight = Column(Float, nullable=False, default=1.0)
+
+
+class PlaceVibeProfile(Base):
+    """How strongly visitors associate a place with each vibe (0..1), shrunk towards a prior when evidence is thin."""
+
+    __tablename__ = "place_vibe_profiles"
+    __table_args__ = (UniqueConstraint("place_id", "vibe_id", name="uq_place_vibe"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    place_id = Column(String, nullable=False, index=True)
+    vibe_id = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
+    selections = Column(Float, nullable=False, default=0.0)  # recency/rating-weighted selections
+    support = Column(Integer, nullable=False, default=0)  # feedback records that mention this vibe
+    confidence = Column(Float, nullable=False, default=0.0)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class PlaceAspectSignal(Base):
+    """Share of (weighted) visitors reporting a characteristic, e.g. too_crowded 0.62 — a general place-level signal."""
+
+    __tablename__ = "place_aspect_signals"
+    __table_args__ = (UniqueConstraint("place_id", "aspect_id", name="uq_place_aspect"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    place_id = Column(String, nullable=False, index=True)
+    aspect_id = Column(Integer, nullable=False)
+    rate = Column(Float, nullable=False)
+    support = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class PlaceFeedbackSummary(Base):
+    __tablename__ = "place_feedback_summaries"
+
+    place_id = Column(String, primary_key=True)
+    feedback_count = Column(Integer, nullable=False, default=0)
+    weighted_count = Column(Float, nullable=False, default=0.0)
+    average_rating = Column(Float, nullable=True)
+    bayes_rating = Column(Float, nullable=True)  # shrunk towards the global mean when feedback is thin
+    recommend_share = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=False, default=0.0)
+    synthetic_share = Column(Float, nullable=False, default=0.0)
+    last_feedback_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class UserVibePreference(Base):
+    """A traveller's demonstrated affinity for a vibe: 0.5 neutral, towards 1 liked, towards 0 disliked."""
+
+    __tablename__ = "user_vibe_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "vibe_id", name="uq_user_vibe"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    vibe_id = Column(Integer, nullable=False)
+    affinity = Column(Float, nullable=False)
+    evidence = Column(Float, nullable=False, default=0.0)
+    support = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class UserAspectPreference(Base):
+    """A traveller's aversion to a characteristic (too_crowded, too_expensive…): user-specific, never a place penalty."""
+
+    __tablename__ = "user_aspect_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "aspect_id", name="uq_user_aspect"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    aspect_id = Column(Integer, nullable=False)
+    aversion = Column(Float, nullable=False)
+    support = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=utcnow)

@@ -20,13 +20,13 @@ from app.geo.spatial import get_pois
 from app.entities.resolver import resolve_entity
 from app.knowledge.context import SERIOUS, active_advisories, events_for, weather_notices
 from app.core.dates import parse_range, single
+from app.events.intent import event_intent
 from app.events.service import city_events
 from app.geo.city import City, city_from_geo, city_from_place, resolve_city
 from app.llm.evidence import EvidenceBuilder
 from app.llm.generator import generate
 from app.llm.prompts import AnswerContext
 from app.models import Candidate
-from app.planning.itinerary import PlanRequest, optimise
 from app.query.llm_parser import refine_with_llm
 from app.query.models import IntentType, QueryIntent
 from app.query.parser import parse_query
@@ -501,7 +501,10 @@ class QueryService:
             return
         anchor = self._anchor(state, city)
         window = parse_range(state.intent.raw_query, anchor) or single(anchor)
-        result = city_events(city, window, today=local_now(city.timezone).date(), user_point=state.geo.user_point(), web=serp_client)
+        wants = event_intent(state.intent.raw_query)
+        near_me = wants.near_me and state.geo.user_location is not None  # "near me" → the traveller; otherwise the destination
+        result = city_events(city, window, user_point=state.geo.user_point(), web=serp_client, profile=state.request.profile,
+                             categories=wants.categories, free_only=wants.free_only, festival_only=wants.festival_only, mode="near_me" if near_me else "destination")
         state.errors.extend(s["error"] for s in result["sources_checked"] if s.get("error"))
         wanted = {c for c in (state.intent.constraints.include_categories if state.intent.constraints else [])}
         state.events = result["events"]

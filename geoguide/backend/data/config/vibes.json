@@ -1,0 +1,816 @@
+{
+  "_comment": "Feedback vocabulary and vibe-intelligence parameters. Vibes and aspects are synced into the vibes/aspects tables at startup; adding one here (or promoting a custom vibe) needs no schema change. Nothing here names a specific place or city.",
+  "vibes": [
+    {
+      "key": "peaceful",
+      "label": "Peaceful",
+      "emoji": "🌿",
+      "keywords": [
+        "peaceful",
+        "quiet",
+        "serene",
+        "tranquil",
+        "relaxing",
+        "relaxed",
+        "peace"
+      ],
+      "place_tags": [
+        "peaceful",
+        "quiet"
+      ],
+      "categories": [
+        "park",
+        "lake"
+      ]
+    },
+    {
+      "key": "aesthetic",
+      "label": "Aesthetic",
+      "emoji": "✨",
+      "keywords": [
+        "aesthetic",
+        "beautiful",
+        "gorgeous",
+        "pretty",
+        "stunning",
+        "instagram",
+        "instagrammable",
+        "picturesque"
+      ],
+      "place_tags": [
+        "photogenic",
+        "photography",
+        "architecture"
+      ],
+      "categories": []
+    },
+    {
+      "key": "lively",
+      "label": "Lively",
+      "emoji": "🎉",
+      "keywords": [
+        "lively",
+        "energetic",
+        "buzzing",
+        "vibrant",
+        "happening",
+        "bustling",
+        "fun"
+      ],
+      "place_tags": [
+        "crowded"
+      ],
+      "categories": [
+        "market",
+        "nightlife"
+      ]
+    },
+    {
+      "key": "calm",
+      "label": "Calm",
+      "emoji": "🧘",
+      "keywords": [
+        "calm",
+        "soothing",
+        "slow",
+        "chill",
+        "laid back",
+        "laid-back",
+        "unhurried"
+      ],
+      "place_tags": [
+        "peaceful",
+        "quiet"
+      ],
+      "categories": [
+        "wellness"
+      ]
+    },
+    {
+      "key": "romantic",
+      "label": "Romantic",
+      "emoji": "❤️",
+      "keywords": [
+        "romantic",
+        "date",
+        "couple",
+        "couples",
+        "candlelit",
+        "honeymoon"
+      ],
+      "place_tags": [
+        "romantic",
+        "sunset"
+      ],
+      "categories": []
+    },
+    {
+      "key": "family_friendly",
+      "label": "Family-Friendly",
+      "emoji": "👨‍👩‍👧",
+      "keywords": [
+        "family",
+        "kids",
+        "children",
+        "child friendly",
+        "kid friendly",
+        "families"
+      ],
+      "place_tags": [
+        "family",
+        "family_friendly"
+      ],
+      "categories": [
+        "park",
+        "wildlife"
+      ]
+    },
+    {
+      "key": "social",
+      "label": "Social",
+      "emoji": "🧑‍🤝‍🧑",
+      "keywords": [
+        "friends",
+        "hang out",
+        "hangout",
+        "social",
+        "meet people",
+        "group"
+      ],
+      "place_tags": [],
+      "categories": [
+        "bar",
+        "cafe",
+        "nightlife"
+      ]
+    },
+    {
+      "key": "youthful",
+      "label": "Youthful",
+      "emoji": "🎵",
+      "keywords": [
+        "young",
+        "trendy",
+        "college",
+        "hip",
+        "youthful",
+        "students"
+      ],
+      "place_tags": [],
+      "categories": [
+        "nightlife",
+        "bar"
+      ]
+    },
+    {
+      "key": "cozy",
+      "label": "Cozy",
+      "emoji": "☕",
+      "keywords": [
+        "cozy",
+        "cosy",
+        "warm",
+        "intimate",
+        "snug",
+        "homely"
+      ],
+      "place_tags": [],
+      "categories": [
+        "cafe",
+        "bakery"
+      ]
+    },
+    {
+      "key": "cultural",
+      "label": "Cultural",
+      "emoji": "🏛️",
+      "keywords": [
+        "history",
+        "historic",
+        "historical",
+        "heritage",
+        "culture",
+        "cultural",
+        "traditional",
+        "tradition",
+        "ancient"
+      ],
+      "place_tags": [
+        "heritage",
+        "spiritual",
+        "unesco",
+        "architecture"
+      ],
+      "categories": [
+        "temple",
+        "monument",
+        "museum",
+        "village"
+      ]
+    },
+    {
+      "key": "scenic",
+      "label": "Scenic",
+      "emoji": "🌅",
+      "keywords": [
+        "view",
+        "views",
+        "scenic",
+        "landscape",
+        "sunset",
+        "sunrise",
+        "nature",
+        "greenery",
+        "panorama"
+      ],
+      "place_tags": [
+        "sunset",
+        "sunrise",
+        "nature"
+      ],
+      "categories": [
+        "viewpoint",
+        "lake",
+        "beach"
+      ]
+    },
+    {
+      "key": "adventurous",
+      "label": "Adventurous",
+      "emoji": "🏕️",
+      "keywords": [
+        "adventure",
+        "adventurous",
+        "trek",
+        "trekking",
+        "hike",
+        "hiking",
+        "climb",
+        "climbing",
+        "thrill",
+        "thrilling",
+        "rafting"
+      ],
+      "place_tags": [
+        "adventure"
+      ],
+      "categories": [
+        "activity",
+        "wildlife"
+      ]
+    },
+    {
+      "key": "premium",
+      "label": "Premium",
+      "emoji": "💎",
+      "keywords": [
+        "luxury",
+        "luxurious",
+        "upscale",
+        "premium",
+        "fancy",
+        "classy",
+        "fine dining",
+        "elegant"
+      ],
+      "place_tags": [
+        "luxury"
+      ],
+      "categories": []
+    },
+    {
+      "key": "shopping",
+      "label": "Shopping",
+      "emoji": "🛍️",
+      "keywords": [
+        "shopping",
+        "shops",
+        "shop",
+        "bargain",
+        "bargaining",
+        "stalls",
+        "boutiques"
+      ],
+      "place_tags": [
+        "shopping"
+      ],
+      "categories": [
+        "market"
+      ]
+    },
+    {
+      "key": "nightlife",
+      "label": "Nightlife",
+      "emoji": "🌙",
+      "keywords": [
+        "nightlife",
+        "night",
+        "pub",
+        "club",
+        "clubbing",
+        "drinks",
+        "cocktails",
+        "bar"
+      ],
+      "place_tags": [
+        "nightlife"
+      ],
+      "categories": [
+        "bar",
+        "nightlife"
+      ]
+    }
+  ],
+  "vibe_synonyms": {
+    "chill": "calm",
+    "chilled": "calm",
+    "relaxing": "peaceful",
+    "quiet": "peaceful",
+    "serene": "peaceful",
+    "beautiful": "aesthetic",
+    "instagrammable": "aesthetic",
+    "pretty": "aesthetic",
+    "fun": "lively",
+    "energetic": "lively",
+    "buzzing": "lively",
+    "vibrant": "lively",
+    "kid friendly": "family_friendly",
+    "kids": "family_friendly",
+    "family": "family_friendly",
+    "trendy": "youthful",
+    "hip": "youthful",
+    "cosy": "cozy",
+    "warm": "cozy",
+    "historic": "cultural",
+    "heritage": "cultural",
+    "historical": "cultural",
+    "views": "scenic",
+    "nature": "scenic",
+    "thrilling": "adventurous",
+    "adventure": "adventurous",
+    "luxury": "premium",
+    "upscale": "premium",
+    "classy": "premium",
+    "night life": "nightlife",
+    "party": "nightlife"
+  },
+  "aspects": [
+    {
+      "key": "good_views",
+      "label": "Good views",
+      "polarity": "positive",
+      "keywords": [
+        "good views",
+        "great view",
+        "great views",
+        "amazing view",
+        "beautiful view",
+        "the view",
+        "views"
+      ]
+    },
+    {
+      "key": "good_ambience",
+      "label": "Good ambience",
+      "polarity": "positive",
+      "keywords": [
+        "ambience",
+        "ambiance",
+        "atmosphere",
+        "vibe was",
+        "great vibe"
+      ]
+    },
+    {
+      "key": "less_crowded",
+      "label": "Less crowded",
+      "polarity": "positive",
+      "keywords": [
+        "not crowded",
+        "less crowded",
+        "uncrowded",
+        "empty",
+        "hardly anyone",
+        "few people"
+      ],
+      "values_characteristic": "too_crowded"
+    },
+    {
+      "key": "good_for_photos",
+      "label": "Good for photos",
+      "polarity": "positive",
+      "keywords": [
+        "photos",
+        "photo",
+        "pictures",
+        "photography",
+        "instagram"
+      ]
+    },
+    {
+      "key": "good_food",
+      "label": "Good food",
+      "polarity": "positive",
+      "keywords": [
+        "good food",
+        "great food",
+        "delicious",
+        "tasty",
+        "food was great",
+        "loved the food"
+      ]
+    },
+    {
+      "key": "good_service",
+      "label": "Good service",
+      "polarity": "positive",
+      "keywords": [
+        "good service",
+        "great service",
+        "friendly staff",
+        "helpful staff",
+        "polite"
+      ]
+    },
+    {
+      "key": "interesting_history",
+      "label": "Interesting/history",
+      "polarity": "positive",
+      "keywords": [
+        "history",
+        "interesting",
+        "fascinating",
+        "informative",
+        "heritage"
+      ]
+    },
+    {
+      "key": "good_value",
+      "label": "Good value",
+      "polarity": "positive",
+      "keywords": [
+        "good value",
+        "worth it",
+        "worth the money",
+        "cheap",
+        "affordable",
+        "reasonable",
+        "free entry"
+      ],
+      "values_characteristic": "too_expensive"
+    },
+    {
+      "key": "activities",
+      "label": "Activities",
+      "polarity": "positive",
+      "keywords": [
+        "activities",
+        "things to do",
+        "boating",
+        "rides",
+        "games"
+      ]
+    },
+    {
+      "key": "clean",
+      "label": "Clean",
+      "polarity": "positive",
+      "keywords": [
+        "clean",
+        "well maintained",
+        "well-maintained",
+        "tidy",
+        "spotless"
+      ]
+    },
+    {
+      "key": "easy_access",
+      "label": "Easy to access",
+      "polarity": "positive",
+      "keywords": [
+        "easy to reach",
+        "easy to get",
+        "accessible",
+        "well connected",
+        "easy access"
+      ]
+    },
+    {
+      "key": "too_crowded",
+      "label": "Too crowded",
+      "polarity": "negative",
+      "keywords": [
+        "crowded",
+        "crowd",
+        "packed",
+        "overcrowded",
+        "too many people",
+        "rush",
+        "queue",
+        "queues"
+      ],
+      "place_tags": [
+        "crowded"
+      ]
+    },
+    {
+      "key": "too_expensive",
+      "label": "Too expensive",
+      "polarity": "negative",
+      "keywords": [
+        "expensive",
+        "overpriced",
+        "costly",
+        "pricey",
+        "rip off",
+        "ripoff"
+      ],
+      "price_level_at_least": 3
+    },
+    {
+      "key": "poor_service",
+      "label": "Poor service",
+      "polarity": "negative",
+      "keywords": [
+        "poor service",
+        "bad service",
+        "rude",
+        "slow service",
+        "unhelpful"
+      ]
+    },
+    {
+      "key": "boring",
+      "label": "Boring",
+      "polarity": "negative",
+      "keywords": [
+        "boring",
+        "dull",
+        "nothing to do",
+        "bland"
+      ]
+    },
+    {
+      "key": "not_as_described",
+      "label": "Not as described",
+      "polarity": "negative",
+      "keywords": [
+        "not as described",
+        "misleading",
+        "not like the photos",
+        "false advertising"
+      ]
+    },
+    {
+      "key": "difficult_to_reach",
+      "label": "Difficult to reach",
+      "polarity": "negative",
+      "keywords": [
+        "hard to reach",
+        "difficult to reach",
+        "hard to find",
+        "far away",
+        "no parking",
+        "bad road",
+        "difficult to get"
+      ]
+    },
+    {
+      "key": "poor_maintenance",
+      "label": "Poor maintenance",
+      "polarity": "negative",
+      "keywords": [
+        "dirty",
+        "poorly maintained",
+        "badly maintained",
+        "litter",
+        "garbage",
+        "broken",
+        "smelly",
+        "run down"
+      ]
+    },
+    {
+      "key": "uncomfortable",
+      "label": "Uncomfortable",
+      "polarity": "negative",
+      "keywords": [
+        "uncomfortable",
+        "unsafe",
+        "felt unsafe",
+        "hot and",
+        "no shade",
+        "harassed",
+        "sketchy"
+      ]
+    },
+    {
+      "key": "too_noisy",
+      "label": "Too noisy",
+      "polarity": "negative",
+      "keywords": [
+        "noisy",
+        "loud",
+        "noise"
+      ]
+    },
+    {
+      "key": "nothing_special",
+      "label": "Nothing special",
+      "polarity": "negative",
+      "keywords": [
+        "nothing special",
+        "overrated",
+        "average",
+        "meh",
+        "not worth",
+        "underwhelming"
+      ]
+    }
+  ],
+  "recommendation": {
+    "5": "loved_it",
+    "4": "good",
+    "3": "okay",
+    "2": "didnt_like",
+    "1": "avoid"
+  },
+  "recommendation_labels": {
+    "loved_it": "Loved it",
+    "good": "Good",
+    "okay": "Okay",
+    "didnt_like": "Didn't like it",
+    "avoid": "Avoid / not recommended"
+  },
+  "crowd_levels": [
+    "empty",
+    "low",
+    "moderate",
+    "high",
+    "very_high"
+  ],
+  "price_levels": [
+    "free",
+    "cheap",
+    "moderate",
+    "expensive",
+    "very_expensive"
+  ],
+  "score_fields": [
+    "ambience_score",
+    "cleanliness_score",
+    "service_score",
+    "accessibility_score",
+    "photo_worthiness"
+  ],
+  "custom_vibes": {
+    "max_length": 30,
+    "max_per_feedback": 3,
+    "min_letters": 3,
+    "promote_after_uses": 5,
+    "blocked_words": [
+      "fuck",
+      "shit",
+      "bitch",
+      "sex"
+    ]
+  },
+  "sentiment": {
+    "positive": [
+      "love",
+      "loved",
+      "lovely",
+      "great",
+      "amazing",
+      "awesome",
+      "beautiful",
+      "wonderful",
+      "fantastic",
+      "excellent",
+      "good",
+      "nice",
+      "enjoyed",
+      "enjoy",
+      "peaceful",
+      "clean",
+      "worth",
+      "recommend",
+      "perfect",
+      "best",
+      "fun",
+      "stunning",
+      "friendly",
+      "relaxing",
+      "delicious"
+    ],
+    "negative": [
+      "bad",
+      "terrible",
+      "awful",
+      "worst",
+      "dirty",
+      "crowded",
+      "boring",
+      "expensive",
+      "overpriced",
+      "rude",
+      "disappointing",
+      "disappointed",
+      "noisy",
+      "unsafe",
+      "waste",
+      "avoid",
+      "poor",
+      "smelly",
+      "hate",
+      "hated",
+      "meh",
+      "overrated",
+      "underwhelming",
+      "packed"
+    ],
+    "negations": [
+      "not",
+      "no",
+      "never",
+      "wasn't",
+      "isn't",
+      "didn't",
+      "wasnt",
+      "isnt",
+      "didnt",
+      "hardly",
+      "barely"
+    ]
+  },
+  "aggregation": {
+    "place_half_life_days": 365,
+    "prior_strength": 5,
+    "derived_weight": 0.5,
+    "prior_tag": 0.5,
+    "prior_category": 0.35,
+    "prior_base": 0.08,
+    "rating_weight": {
+      "5": 1.0,
+      "4": 0.9,
+      "3": 0.8,
+      "2": 0.7,
+      "1": 0.6
+    },
+    "rating_prior_mean": 3.6,
+    "rating_prior_strength": 5,
+    "negative_prior_strength": 5,
+    "negative_prior_from_tags": 0.4
+  },
+  "preferences": {
+    "half_life_days": 120,
+    "shrinkage": 2,
+    "cold_start_below": 1,
+    "established_at": 3,
+    "interest_prior_weight": 0.3,
+    "interest_vibes": {
+      "heritage": [
+        "cultural"
+      ],
+      "culture": [
+        "cultural"
+      ],
+      "nature": [
+        "scenic",
+        "peaceful"
+      ],
+      "adventure": [
+        "adventurous"
+      ],
+      "nightlife": [
+        "nightlife",
+        "lively"
+      ],
+      "food": [
+        "cozy"
+      ],
+      "cafes": [
+        "cozy"
+      ],
+      "shopping": [
+        "shopping"
+      ],
+      "art": [
+        "aesthetic",
+        "cultural"
+      ],
+      "wellness": [
+        "calm",
+        "peaceful"
+      ]
+    }
+  },
+  "ranking": {
+    "aversion_penalty": 0.8,
+    "max_aversion_penalty": 0.4,
+    "reason_min_compat": 0.2,
+    "reason_min_aversion": 0.15,
+    "community_reason_min_confidence": 0.3,
+    "association_neutral": 0.3
+  }
+}

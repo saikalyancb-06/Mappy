@@ -45,7 +45,7 @@ if _is_sqlite:
 CAPABILITIES: dict[str, object] = {"dialect": engine.dialect.name, "postgis": False, "pgvector": False}
 
 # Tables that hold user-owned data and must survive a schema upgrade.
-_USER_TABLES = {"users", "user_preferences", "interaction_events"}
+_USER_TABLES = {"users", "user_preferences", "interaction_events", "feedback", "feedback_vibes", "feedback_aspects", "vibes", "aspects", "user_vibe_preferences", "user_aspect_preferences"}  # never dropped on upgrade
 _LEGACY_TABLES = {"areas", "pois", "knowledge_documents", "hotels", "weather_daily", "weather_hourly", "events_festivals", "safety_advisories", "ingestion_jobs", "chat_sessions", "chat_messages", "trips", "itineraries", "itinerary_items", "languages", "currencies"}
 
 

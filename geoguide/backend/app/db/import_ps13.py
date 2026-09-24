@@ -123,7 +123,6 @@ def import_ps13(db_path: Path | str | None = None) -> dict[str, int]:
             counts["destinations"] += 1
         db.flush()
         centres = {d.id: (d.lat, d.lon) for d in db.scalars(select(Destination)).all()}
-        currencies = {row["country_code"]: row["default_currency"] for row in rows("SELECT c.country_code, n.default_currency FROM cities c JOIN countries n ON n.country_id = c.country_id")}
 
         def track(destination_id: str, lat: float, lon: float) -> None:
             centre = centres.get(destination_id)
