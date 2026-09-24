@@ -1,0 +1,1 @@
+{"id": "dest-testville", "name": "Testville", "aliases": ["Test Ville", "Old Testville"], "region": "Test Region", "country": "Testland", "country_code": "TL", "lat": 10.0, "lon": 20.0, "coverage_radius_km": 8, "timezone": "UTC", "currency": "INR", "languages": ["en"], "summary": "A fictional town used by the test suite."}

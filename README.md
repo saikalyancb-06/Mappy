@@ -1,81 +1,128 @@
 # GeoGuide
 
-GeoGuide is a location-aware AI place companion built to work for any place on Earth using live data fetched at runtime.
+A location-aware travel intelligence app. GeoGuide routes each question to the right sources (spatial search, place knowledge, live weather, safety data, web search), ranks the evidence, and only then asks the LLM to write a short answer that cites that evidence. The LLM writes the answer; the data provides the facts.
 
-## Repository layout
+The demo uses **Hampi** (Karnataka), but Hampi is only a *data pack*: no code knows about it, and any destination can be added by dropping in a pack.
 
-- backend/ — FastAPI service, SQLite schema, ingestion, LLM/RAG components
-- frontend/ — Vite + React app
-- README.md — setup and run instructions
+```
+geoguide/
+├── backend/   FastAPI · SQLite or PostgreSQL+PostGIS+pgvector · Groq · SerpApi · Open-Meteo
+└── frontend/  React + Vite PWA (Now · Nearby · Plan · Ask · Profile)
+```
 
 ## Quick start
 
-1. Create a Python environment.
-2. Install backend dependencies:
+### 1. Backend
 
-   ```bash
-   cd geoguide/backend
-   python -m venv .venv
-   . .venv/bin/activate  # Windows: .venv\Scripts\activate
-   python -m pip install -r requirements.txt
-   cp .env.example .env
-   ```
+```bash
+cd geoguide/backend
+python -m venv .venv
+. .venv/bin/activate            # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env            # then put your keys in .env (see below)
+uvicorn app.main:app --port 8000 --reload
+```
 
-3. Start the backend:
+Put your keys in `geoguide/backend/.env`. They stay on the server and are never sent to the browser:
 
-   ```bash
-   cd geoguide/backend
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+```
+GROQ_API_KEY=gsk_...
+SERPAPI_KEY=...
+AUTH_SECRET=<any long random string>
+```
 
-4. Check the health endpoint:
+On first start the backend creates the database, imports every pack in `backend/data/packs/` (Hampi), and downloads the embedding model in the background (about 120 MB, once). Until the model is ready, knowledge search uses keyword (BM25) matching and says so in its responses. Check `http://localhost:8000/api/health` to see which services are configured.
 
-   ```bash
-   curl http://localhost:8000/api/health
-   ```
+### 2. Frontend
 
-5. Start the mobile-first frontend in a second terminal:
+```bash
+cd geoguide/frontend
+npm install
+npm run dev        # opens on http://localhost:5173, proxies /api to :8000
+```
 
-   ```bash
-   cd geoguide/frontend
-   npm install
-   npm run dev
-   ```
+### 3. Demo walkthrough (Hampi)
 
-   Open the printed Vite URL. On a desktop browser, GeoGuide intentionally stays inside a centered phone-width frame. The first run shows onboarding and a location permission step; preferences and the permission choice are stored locally for that browser.
+1. Sign up, then pick interests.
+2. On **Start with a place**, choose **Hampi** and optionally turn on your location. The two stay separate: "near me" always means your device location, and "in Hampi" means Hampi.
+3. **Now** shows the local time, weather, daylight left, active advisories (with their stored severity), events, and a grounded briefing.
+4. **Nearby** lists ranked places with distance, open status, fee, visit length, access and "why this suits you". Toggle between *Hampi* and *Near me*.
+5. **Plan** builds a 2h, 4h or full-day plan that checks opening hours, travel time and cost, then re-plans for cheaper, greener or less walking.
+6. **Ask**: try these:
+   * *What should I visit in Hampi tomorrow?* (discovery + forecast + advisories)
+   * *Why is Hampi historically important?* (knowledge retrieval)
+   * *Coffee shops near me* (GPS + spatial + live maps search; asks for location if it's off)
+   * *Where is SLV Hotel in Gandhi Bazaar?* (entity resolution with branch disambiguation)
+   * *Is it raining near me?* (weather only, no RAG)
+   * *How should I dress for temples?*, *Which places are step-free?*, *Plan my evening around Hampi*
 
-## Environment
+   Tap a numbered chip to see its source. The 🐞 button shows the full retrieval trace in development.
+7. **Profile** sets interests, budget, pace, walking and step-free access, which change ranking and plans. Choosing Kannada or Hindi translates answers and keeps place names.
 
-Set values in backend/.env before running the app. At minimum:
+## How a question is answered
 
-- Use Python 3.12 for the backend environment. The project avoids Python 3.14 because of dependency compatibility issues in the FastAPI/Pydantic stack.
-- Keep a single backend virtual environment under geoguide/backend/.venv rather than duplicating venvs across the repo.
+```
+question ─► QueryIntent (parser: intent, category, entity, place, radius, time, preferences)
+        ─► GeoContext   (device GPS w/ freshness ≠ active destination ≠ place named in question)
+        ─► Router       (only the sources this intent needs)
+              ├─ spatial candidates   PostGIS ST_DWithin | SQLite bbox + haversine
+              ├─ entity resolution    name/alias/acronym, branch, locality, category, distance, source agreement
+              ├─ knowledge            BM25 + sentence-transformer vectors (pgvector | numpy), RRF, metadata filters
+              ├─ live                 Open-Meteo weather, advisories, events, SerpApi maps/web/events
+        ─► normalise → dedupe (per-field source priority) → hard filters → ranking (weights in config)
+        ─► evidence [E1..En] with provenance
+        ─► Groq (bounded evidence) → validator (places, ratings, distances, prices, times, temps, open-now)
+              └─ on failure: one repair pass, then a deterministic answer built from the evidence
+        ─► structured response: answer, intent, geo_context, results, sources, confidence, notices, trace
+```
 
-- GROQ_API_KEY
-- GROQ_MODEL_FAST
-- GROQ_MODEL_REASONING
-- GROQ_MODEL_RESEARCH
-- AUTH_SECRET (use a long random value outside development)
+For example, *"Coffee shops near me"* never calls the LLM for search and never touches RAG. It runs GPS → spatial → (maps search if coverage is thin) → ranking → a short answer.
 
-The project is intentionally configured to use environment variables for keys and model selection.
+## Configuration & data
 
-## Resilience defaults
+| What | Where |
+|---|---|
+| Categories, synonyms, OSM mappings, preferences | `backend/data/config/taxonomy.json` |
+| Intent cue phrases, radii, query expansions | `backend/data/config/intents.json` |
+| Ranking weights, dedup, source priority, entity-resolution weights | `backend/data/config/ranking.json` |
+| Itinerary speeds, fares, CO₂, presets | `backend/data/config/itinerary.json` |
+| Destination packs (destination, POIs, knowledge, facts, advisories, events, provenance) | `backend/data/packs/<name>/` |
 
-- API endpoints accept missing or invalid location payloads and fall back to a safe default city/coordinates instead of crashing.
-- Ingestion jobs validate coordinates before starting, and invalid values are normalized to a default location.
-- Optional AI/vector dependencies such as Qdrant and sentence-transformers degrade gracefully when not installed, returning safe fallback behavior rather than runtime exceptions during app startup.
-- The backend test suite is used as the stability gate for these crash-safe defaults.
+**Add a destination:** copy `data/packs/hampi` as a template, edit the JSON, then run `python -m app.db.seed --pack data/packs/<name>` (or restart with an empty database). Places without a pack still work: GeoGuide pulls OpenStreetMap POIs on demand and uses live maps search.
 
-## Frontend defaults
+**PostgreSQL + PostGIS + pgvector:** set `DATABASE_URL=postgresql+psycopg://user:pass@host/db`. Extensions are enabled automatically when available. `/api/health` reports `postgis`/`pgvector`.
 
-- The frontend uses the local FastAPI endpoints through the Vite `/api` proxy. Start the backend before loading live data.
-- The mobile shell implements onboarding, permission/ingestion handoff, Now, Nearby, Plan, Ask, Profile, place detail, saved places, and `/dev/ui-kit` with loading, error, empty, and offline-friendly states.
-- The first frontend open shows a Sign up/Login gate backed by SQLite users, PBKDF2 password hashes, and signed bearer sessions. Profile includes Logout; configure `AUTH_SECRET` before deploying.
-- Place names, scores, distances, images, weather, and briefing values shown after loading come from API responses; unavailable values are hidden or described as unavailable.
-- `/api/now` and `/api/nearby` now use browser coordinates with bounded Nominatim, Open-Meteo, and Overpass requests. Provider failures return partial/empty data instead of crashing.
-- Location ingestion jobs are persisted in SQLite and can be queried after process-local memory is gone.
-- The app is installable as a PWA through `frontend/public/manifest.webmanifest` and caches its shell for offline reopening. Native Capacitor packaging, interactive Leaflet maps, and external image enrichment remain optional follow-up integrations.
+**Re-embed knowledge** after changing `EMBEDDING_MODEL`: run `python -m app.retrieval.indexer --force`. The model name and dimension are stored per chunk, and vectors from different models are never compared.
 
-## Notes
+## API
 
-The project is intentionally incremental: live place/context retrieval and the resilient mobile product shell are in place, while provider-specific enrichment and native packaging can be added without changing the core API contract.
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/ask` | `{question, user_location?, active_destination?, selected_place_id?, language?, debug?}` → grounded answer + structured context |
+| `GET /api/now` | Briefing, weather, daylight, advisories, events, suggestions |
+| `GET /api/nearby` | Ranked places; `origin=auto\|user\|destination`, `category`, `group`, `open_now`, `radius_km` |
+| `GET /api/places/{id}` | Place detail with facts, advisories, provenance |
+| `POST /api/plan` | Itinerary; `duration=2h\|4h\|full\|minutes`, `preset=balanced\|cheaper\|greener\|less_walking`, `previous` for change explanations |
+| `GET /api/destinations`, `/destinations/resolve`, `/destinations/{id}/pack` | Destination search, resolution, and cached knowledge pack |
+| `GET /api/weather`, `/api/location/describe`, `/api/config`, `/api/health` | Supporting endpoints |
+
+A location is sent as `{lat, lon, accuracy_m, timestamp}`. Without a timestamp it is ignored, it is flagged as stale after 10 minutes, and it is rejected after 1 hour. There is no default city: if the request has no location and no destination, the API says what it needs.
+
+## Tests
+
+```bash
+cd geoguide/backend && python -m pytest -q
+cd geoguide/frontend && npm run lint && npm run build
+```
+
+The backend suite (81 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
+
+* GPS available, missing, stale, low-accuracy or invalid, and "explicit destination vs GPS"
+* A labelled intent set, radius and category hard filters, and ranking precision@3
+* Entity exact, alias, acronym, branch, ambiguous and not-found cases
+* Deduplication with source priority
+* Hybrid retrieval and embedding-model isolation
+* Weather success and failure, advisory severity and seasons, and web failures
+* Validator catching invented facts, the LLM repair and fallback paths
+* Itineraries: opening hours, locked stops, and re-plan direction
+* The full API

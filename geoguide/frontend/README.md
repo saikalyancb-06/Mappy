@@ -1,16 +1,16 @@
-# React + Vite
+# GeoGuide frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite PWA. See the repository root README for setup and the demo walkthrough.
 
-Currently, two official plugins are available:
+* `src/api.js` – the only place that talks to the backend (`/api`, proxied to :8000 by Vite). No provider keys or external calls live in the frontend.
+* `src/hooks/useDeviceLocation.js` – continuous GPS with accuracy, timestamp and explicit status; never substitutes a default location.
+* `src/App.jsx` – app state: session, preferences, the active destination and the device location, kept separate.
+* `src/views/*` – Now, Nearby, Place detail, Plan, Ask, Profile, Start.
+* Option lists (interests, categories, languages, plan presets) come from `GET /api/config`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run lint
+npm run build
+```

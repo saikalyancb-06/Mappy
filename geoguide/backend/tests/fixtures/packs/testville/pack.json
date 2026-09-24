@@ -1,0 +1,1 @@
+{"id": "pack-testville", "name": "Testville synthetic pack", "version": "test", "license": "test", "collected_at": "2026-01-01", "geographic_coverage": "Fictional town for tests", "confidence": 0.9, "sources": [{"name": "synthetic", "url": "https://example.org/testville"}]}

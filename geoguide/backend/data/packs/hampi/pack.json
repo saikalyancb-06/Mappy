@@ -1,0 +1,17 @@
+{
+  "id": "pack-hampi",
+  "name": "Hampi demo destination pack",
+  "version": "2026.09.1",
+  "description": "Curated demo dataset for Hampi (Vijayanagara), Karnataka: destination, points of interest, stays, knowledge articles, POI facts, standing safety guidance and recurring events. Loaded by the generic pack loader (app/db/seed.py); no application code depends on it.",
+  "license": "CC BY 4.0 for curated text; facts compiled from public sources listed below",
+  "collected_at": "2026-09-24",
+  "geographic_coverage": "Hampi and surroundings within ~12 km of the Virupaksha Temple (Hampi, Kamalapura, Anegundi, Sanapur)",
+  "confidence": 0.8,
+  "sources": [
+    {"name": "UNESCO World Heritage Centre – Group of Monuments at Hampi", "url": "https://whc.unesco.org/en/list/241"},
+    {"name": "Archaeological Survey of India – Hampi circle", "url": "https://asi.nic.in/"},
+    {"name": "Karnataka Tourism – Hampi", "url": "https://www.karnatakatourism.org/"},
+    {"name": "OpenStreetMap contributors (coordinates cross-check)", "url": "https://www.openstreetmap.org/"}
+  ],
+  "notes": "Coordinates marked 'approximate' are within a few hundred metres. Fees and timings change; fields that could not be verified are left empty (unknown) rather than guessed. Standing safety guidance is general and is not a live advisory feed."
+}

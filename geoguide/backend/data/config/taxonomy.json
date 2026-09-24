@@ -1,0 +1,558 @@
+{
+  "_comment": "Category taxonomy shared by the query parser, OSM/SerpApi normalisers, ranking and the frontend. Add categories here, not in code.",
+  "categories": {
+    "cafe": {
+      "kind": "food",
+      "group": "food",
+      "label": "Cafe",
+      "search_term": "cafes",
+      "synonyms": [
+        "cafe",
+        "cafes",
+        "café",
+        "cafés",
+        "coffee",
+        "coffee shop",
+        "coffee shops",
+        "espresso",
+        "tea house",
+        "tea shop"
+      ],
+      "osm": [
+        "amenity=cafe"
+      ]
+    },
+    "restaurant": {
+      "kind": "food",
+      "group": "food",
+      "label": "Restaurant",
+      "search_term": "restaurants",
+      "synonyms": [
+        "restaurant",
+        "restaurants",
+        "food",
+        "eat",
+        "eating",
+        "dining",
+        "lunch",
+        "dinner",
+        "breakfast",
+        "meal",
+        "meals",
+        "thali",
+        "dosa",
+        "south indian food",
+        "north indian food",
+        "biryani",
+        "vegetarian food",
+        "places to eat",
+        "somewhere to eat"
+      ],
+      "osm": [
+        "amenity=restaurant",
+        "amenity=fast_food",
+        "amenity=food_court"
+      ]
+    },
+    "bakery": {
+      "kind": "food",
+      "group": "food",
+      "label": "Bakery",
+      "search_term": "bakeries",
+      "synonyms": [
+        "bakery",
+        "bakeries",
+        "pastry",
+        "cake shop"
+      ],
+      "osm": [
+        "shop=bakery"
+      ]
+    },
+    "bar": {
+      "kind": "food",
+      "group": "nightlife",
+      "label": "Bar",
+      "search_term": "bars",
+      "synonyms": [
+        "bar",
+        "bars",
+        "pub",
+        "pubs",
+        "brewery",
+        "nightlife",
+        "drinks"
+      ],
+      "osm": [
+        "amenity=bar",
+        "amenity=pub"
+      ]
+    },
+    "temple": {
+      "kind": "attraction",
+      "group": "heritage",
+      "label": "Temple",
+      "search_term": "temples",
+      "synonyms": [
+        "temple",
+        "temples",
+        "shrine",
+        "shrines",
+        "mandir",
+        "gudi"
+      ],
+      "osm": [
+        "amenity=place_of_worship"
+      ]
+    },
+    "monument": {
+      "kind": "attraction",
+      "group": "heritage",
+      "label": "Monument",
+      "search_term": "historical monuments",
+      "synonyms": [
+        "monument",
+        "monuments",
+        "ruins",
+        "ruin",
+        "historic site",
+        "historic sites",
+        "historical sites",
+        "heritage site",
+        "heritage sites",
+        "palace",
+        "palaces",
+        "fort",
+        "forts",
+        "enclosure",
+        "archaeological site"
+      ],
+      "osm": [
+        "historic=*",
+        "tourism=attraction"
+      ]
+    },
+    "museum": {
+      "kind": "attraction",
+      "group": "culture",
+      "label": "Museum",
+      "search_term": "museums",
+      "synonyms": [
+        "museum",
+        "museums",
+        "gallery",
+        "galleries",
+        "exhibition"
+      ],
+      "osm": [
+        "tourism=museum",
+        "tourism=gallery"
+      ]
+    },
+    "viewpoint": {
+      "kind": "attraction",
+      "group": "nature",
+      "label": "Viewpoint",
+      "search_term": "viewpoints",
+      "synonyms": [
+        "viewpoint",
+        "viewpoints",
+        "view point",
+        "lookout",
+        "sunset point",
+        "sunrise point",
+        "sunset spot",
+        "sunrise spot",
+        "hilltop",
+        "scenic view",
+        "scenic views"
+      ],
+      "osm": [
+        "tourism=viewpoint",
+        "natural=peak"
+      ]
+    },
+    "lake": {
+      "kind": "attraction",
+      "group": "nature",
+      "label": "Lake & river",
+      "search_term": "lakes",
+      "synonyms": [
+        "lake",
+        "lakes",
+        "river",
+        "riverside",
+        "waterfall",
+        "waterfalls",
+        "reservoir",
+        "dam"
+      ],
+      "osm": [
+        "natural=water",
+        "waterway=waterfall"
+      ]
+    },
+    "park": {
+      "kind": "attraction",
+      "group": "nature",
+      "label": "Park",
+      "search_term": "parks",
+      "synonyms": [
+        "park",
+        "parks",
+        "garden",
+        "gardens",
+        "green space"
+      ],
+      "osm": [
+        "leisure=park",
+        "leisure=garden"
+      ]
+    },
+    "wildlife": {
+      "kind": "attraction",
+      "group": "nature",
+      "label": "Wildlife",
+      "search_term": "wildlife sanctuaries",
+      "synonyms": [
+        "wildlife",
+        "sanctuary",
+        "sanctuaries",
+        "birdwatching",
+        "bird watching",
+        "zoo",
+        "safari"
+      ],
+      "osm": [
+        "leisure=nature_reserve",
+        "tourism=zoo"
+      ]
+    },
+    "activity": {
+      "kind": "activity",
+      "group": "adventure",
+      "label": "Activity",
+      "search_term": "activities",
+      "synonyms": [
+        "coracle",
+        "coracle ride",
+        "boat ride",
+        "boating",
+        "bouldering",
+        "rock climbing",
+        "cycling",
+        "bicycle",
+        "trek",
+        "trekking",
+        "hike",
+        "hiking",
+        "adventure"
+      ],
+      "osm": [
+        "leisure=sports_centre"
+      ]
+    },
+    "village": {
+      "kind": "attraction",
+      "group": "culture",
+      "label": "Village",
+      "search_term": "heritage villages",
+      "synonyms": [
+        "village",
+        "villages",
+        "rural",
+        "crafts",
+        "handicrafts"
+      ],
+      "osm": [
+        "place=village"
+      ]
+    },
+    "market": {
+      "kind": "attraction",
+      "group": "shopping",
+      "label": "Market",
+      "search_term": "markets",
+      "synonyms": [
+        "market",
+        "markets",
+        "bazaar",
+        "bazaars",
+        "shopping",
+        "souvenir",
+        "souvenirs"
+      ],
+      "osm": [
+        "amenity=marketplace",
+        "shop=mall"
+      ]
+    },
+    "hotel": {
+      "kind": "stay",
+      "group": "stay",
+      "label": "Stay",
+      "search_term": "hotels",
+      "synonyms": [
+        "hotel",
+        "hotels",
+        "stay",
+        "stays",
+        "place to stay",
+        "places to stay",
+        "accommodation",
+        "lodging",
+        "resort",
+        "resorts",
+        "guesthouse",
+        "guesthouses",
+        "guest house",
+        "homestay",
+        "homestays",
+        "hostel",
+        "hostels"
+      ],
+      "osm": [
+        "tourism=hotel",
+        "tourism=guest_house",
+        "tourism=hostel",
+        "tourism=motel"
+      ]
+    },
+    "atm": {
+      "kind": "service",
+      "group": "services",
+      "label": "ATM",
+      "search_term": "ATMs",
+      "synonyms": [
+        "atm",
+        "atms",
+        "cash machine",
+        "bank"
+      ],
+      "osm": [
+        "amenity=atm",
+        "amenity=bank"
+      ]
+    },
+    "pharmacy": {
+      "kind": "service",
+      "group": "services",
+      "label": "Pharmacy",
+      "search_term": "pharmacies",
+      "synonyms": [
+        "pharmacy",
+        "pharmacies",
+        "chemist",
+        "medical store",
+        "medicine"
+      ],
+      "osm": [
+        "amenity=pharmacy"
+      ]
+    },
+    "hospital": {
+      "kind": "service",
+      "group": "services",
+      "label": "Hospital",
+      "search_term": "hospitals",
+      "synonyms": [
+        "hospital",
+        "hospitals",
+        "clinic",
+        "doctor",
+        "emergency"
+      ],
+      "osm": [
+        "amenity=hospital",
+        "amenity=clinic"
+      ]
+    },
+    "transport": {
+      "kind": "service",
+      "group": "services",
+      "label": "Transport",
+      "search_term": "bus stations",
+      "synonyms": [
+        "bus stand",
+        "bus station",
+        "railway station",
+        "train station",
+        "auto stand",
+        "taxi",
+        "parking",
+        "car park",
+        "parking lot"
+      ],
+      "osm": [
+        "amenity=bus_station",
+        "railway=station",
+        "amenity=parking"
+      ]
+    }
+  },
+  "groups": {
+    "heritage": {
+      "label": "Heritage",
+      "categories": [
+        "temple",
+        "monument",
+        "museum"
+      ]
+    },
+    "nature": {
+      "label": "Nature",
+      "categories": [
+        "viewpoint",
+        "lake",
+        "park",
+        "wildlife"
+      ]
+    },
+    "food": {
+      "label": "Food",
+      "categories": [
+        "cafe",
+        "restaurant",
+        "bakery"
+      ]
+    },
+    "cafes": {
+      "label": "Cafes",
+      "categories": [
+        "cafe",
+        "bakery"
+      ]
+    },
+    "culture": {
+      "label": "Culture",
+      "categories": [
+        "museum",
+        "village",
+        "market",
+        "temple"
+      ]
+    },
+    "shopping": {
+      "label": "Shopping",
+      "categories": [
+        "market"
+      ]
+    },
+    "adventure": {
+      "label": "Adventure",
+      "categories": [
+        "activity",
+        "viewpoint"
+      ]
+    },
+    "nightlife": {
+      "label": "Nightlife",
+      "categories": [
+        "bar"
+      ]
+    },
+    "art": {
+      "label": "Art",
+      "categories": [
+        "museum",
+        "monument"
+      ]
+    },
+    "stay": {
+      "label": "Stays",
+      "categories": [
+        "hotel"
+      ]
+    },
+    "services": {
+      "label": "Services",
+      "categories": [
+        "atm",
+        "pharmacy",
+        "hospital",
+        "transport"
+      ]
+    }
+  },
+  "attraction_kinds": [
+    "attraction",
+    "activity"
+  ],
+  "preferences": {
+    "peaceful": [
+      "peaceful",
+      "quiet",
+      "calm",
+      "serene",
+      "offbeat",
+      "less crowded",
+      "uncrowded",
+      "hidden",
+      "relaxing",
+      "tranquil"
+    ],
+    "family": [
+      "family",
+      "families",
+      "kids",
+      "children",
+      "child friendly",
+      "kid friendly"
+    ],
+    "budget": [
+      "cheap",
+      "budget",
+      "free",
+      "affordable",
+      "inexpensive",
+      "low cost"
+    ],
+    "step_free": [
+      "wheelchair",
+      "step-free",
+      "step free",
+      "accessible",
+      "no stairs",
+      "elderly",
+      "limited mobility"
+    ],
+    "photography": [
+      "photo",
+      "photos",
+      "photography",
+      "photogenic",
+      "instagram"
+    ],
+    "sunset": [
+      "sunset",
+      "evening views"
+    ],
+    "sunrise": [
+      "sunrise",
+      "dawn"
+    ],
+    "spiritual": [
+      "spiritual",
+      "worship",
+      "pilgrimage",
+      "prayer"
+    ],
+    "romantic": [
+      "romantic",
+      "couple",
+      "date"
+    ],
+    "shade": [
+      "shade",
+      "shaded",
+      "cool",
+      "indoor",
+      "indoors"
+    ],
+    "local": [
+      "local",
+      "authentic",
+      "traditional"
+    ]
+  }
+}

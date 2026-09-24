@@ -23,6 +23,8 @@ htmlcov/
 
 # Backend local runtime data
 geoguide/backend/data/*.db
+geoguide/backend/data/*.db-wal
+geoguide/backend/data/*.db-shm
 geoguide/backend/data/*.sqlite
 geoguide/backend/data/*.sqlite3
 geoguide/backend/data/qdrant/

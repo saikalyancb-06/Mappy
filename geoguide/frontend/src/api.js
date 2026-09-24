@@ -1,72 +1,107 @@
-const request = async (path, options = {}) => {
-  const token = localStorage.getItem('geoguide-token')
-  const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
-    ...options,
-  })
+// Thin client for the GeoGuide API. No keys or provider calls live in the frontend:
+// every external service (LLM, web search, weather, maps) is reached through the backend.
 
-  if (!response.ok) {
-    let detail = ''
-    try {
-      const payload = await response.json()
-      detail = typeof payload.detail === 'string' ? payload.detail : ''
-    } catch {
-      // Some failures do not include a JSON response body.
-    }
-    throw new Error(detail || `Request failed (${response.status})`)
+const TOKEN_KEY = 'geoguide-token'
+
+export const getToken = () => {
+  try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
+}
+
+export class ApiError extends Error {
+  constructor(message, status, detail) {
+    super(message)
+    this.status = status
+    this.detail = detail
   }
+}
 
+const request = async (path, options = {}) => {
+  const token = getToken()
+  let response
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+    })
+  } catch {
+    throw new ApiError('GeoGuide is unreachable. Check your connection and that the backend is running.', 0)
+  }
+  if (!response.ok) {
+    let detail = null
+    try { detail = (await response.json()).detail } catch { /* non-JSON error body */ }
+    const message = typeof detail === 'string' ? detail : detail?.message || `Request failed (${response.status})`
+    throw new ApiError(message, response.status, detail)
+  }
   return response.json()
 }
 
+// ---- context params: physical location and active destination are sent separately ----
+export const contextParams = ({ userLocation, destination } = {}, extra = {}) => {
+  const params = new URLSearchParams()
+  if (userLocation) {
+    params.set('lat', userLocation.lat)
+    params.set('lon', userLocation.lon)
+    if (userLocation.accuracy_m != null) params.set('accuracy_m', userLocation.accuracy_m)
+    params.set('timestamp', userLocation.timestamp)
+  }
+  if (destination?.destination_id) params.set('destination_id', destination.destination_id)
+  else if (destination?.name) params.set('destination', destination.name)
+  Object.entries(extra).forEach(([key, value]) => { if (value !== null && value !== undefined && value !== '') params.set(key, value) })
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+const destinationBody = (destination) => {
+  if (!destination) return null
+  if (destination.destination_id) return { id: destination.destination_id }
+  return { name: destination.name, lat: destination.lat, lon: destination.lon, coverage_radius_km: destination.coverage_radius_km }
+}
+
+// ---- auth & profile ----
 export const signUp = (name, email, password) => request('/api/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, password }) })
 export const logIn = (email, password) => request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
 export const logOut = () => request('/api/auth/logout', { method: 'POST' })
 export const getCurrentUser = () => request('/api/auth/me')
+export const getPreferences = () => request('/api/preferences')
 export const updatePreferences = (preferences) => request('/api/preferences', { method: 'PUT', body: JSON.stringify(preferences) })
 export const recordInteraction = (event) => request('/api/interactions', { method: 'POST', body: JSON.stringify(event) })
 
-const locationQuery = (location = {}) => {
-  const params = new URLSearchParams()
-  if (location.lat != null) params.set('lat', location.lat)
-  if (location.lon != null) params.set('lon', location.lon)
-  if (location.city) params.set('city', location.city)
-  if (location.source) params.set('source', location.source)
-  if (location.timestamp) params.set('timestamp', location.timestamp)
-  if (location.accuracy_meters != null) params.set('accuracy_meters', location.accuracy_meters)
-  return params.toString() ? `?${params.toString()}` : ''
-}
+// ---- configuration & destinations ----
+export const getConfig = () => request('/api/config')
+export const getHealth = () => request('/api/health')
+export const listDestinations = (q = '') => request(`/api/destinations${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+export const resolveDestination = (q) => request(`/api/destinations/resolve?q=${encodeURIComponent(q)}`)
+export const describeLocation = (userLocation) => request(`/api/location/describe${contextParams({ userLocation })}`)
+export const prefetchArea = (context) => request('/api/destinations/prefetch', { method: 'POST', body: JSON.stringify({ ...(context.userLocation || {}), destination_id: context.destination?.destination_id, name: context.destination?.destination_id ? null : context.destination?.name }) })
+export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/${jobId}`)
 
-export const getNow = (location) => request(`/api/now${locationQuery(location)}`)
-export const getNearby = (location, mode = 'nearby', category = null) => {
-  const query = locationQuery(location)
-  const sep = query ? '&' : '?'
-  const catParam = category ? `&category=${encodeURIComponent(category)}` : ''
-  return request(`/api/nearby${query}${sep}mode=${encodeURIComponent(mode)}${catParam}`)
-}
-export const askGeoGuide = (question, locationContext, queryDestination = null) => request('/api/ask', {
+// ---- screens ----
+export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)
+export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm })}`)
+export const getPlace = (id, context) => request(`/api/places/${encodeURIComponent(id)}${contextParams({ userLocation: context?.userLocation })}`)
+
+export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug }) => request('/api/ask', {
   method: 'POST',
-  body: JSON.stringify({ question, location_context: locationContext, query_destination: queryDestination }),
+  body: JSON.stringify({
+    question,
+    user_location: context.userLocation || null,
+    active_destination: destinationBody(context.destination),
+    selected_place_id: selectedPlaceId || null,
+    language,
+    debug: Boolean(debug),
+  }),
 })
 
-export const startLocationIngestion = (location) => request('/api/location', {
+export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedIds, previous }) => request('/api/plan', {
   method: 'POST',
-  body: JSON.stringify(location),
-})
-export const getIngestionStatus = (jobId) => request(`/api/ingestion/${jobId}/events`)
-
-export const normalizePlace = (place) => ({
-  id: place.id || place.name || `place-${Math.random().toString(36).slice(2)}`,
-  name: place.name || 'Unnamed place',
-  category: place.category || 'Place',
-  distance: place.distance_km == null ? null : `${Number(place.distance_km).toFixed(1)} km`,
-  score: place.score == null ? null : Math.round(Number(place.score) * 100),
-  reasons: Array.isArray(place.reasons) ? place.reasons : [],
-  image: place.image_url || place.image || null,
-  lat: place.lat ?? null,
-  lon: place.lon ?? null,
-  source: place.source || null,
-  openingHours: place.opening_hours || null,
-  address: place.address || null,
-  rating: place.rating == null ? null : Number(place.rating),
+  body: JSON.stringify({
+    user_location: context.userLocation || null,
+    active_destination: destinationBody(context.destination),
+    duration,
+    preset,
+    day_offset: dayOffset,
+    start,
+    locked_ids: lockedIds,
+    previous,
+  }),
 })
