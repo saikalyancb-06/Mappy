@@ -30,6 +30,7 @@ GROQ_API_KEY=gsk_...
 SERPAPI_KEY=...
 TICKETMASTER_API_KEY=...        # optional: structured listings in Ticketmaster markets (skipped for India)
 AUTH_SECRET=<any long random string>
+EVENT_MODERATOR_EMAILS=you@example.com   # optional: accounts that review organiser event submissions
 ```
 
 On first start the backend creates the database, imports every pack in `backend/data/packs/` (Hampi), imports the organisers' PS-13 dataset (60 cities, see below), and downloads the embedding model in the background (about 120 MB, once). Until the model is ready, knowledge search uses keyword (BM25) matching and says so in its responses. Check `http://localhost:8000/api/health` to see which services are configured.
@@ -92,7 +93,7 @@ pick ┘   (coverage → geocoder) ├─ events & festivals: city_id = ? AND st
 See **[docs/feedback-and-events.md](docs/feedback-and-events.md)** for the data model, formulas, providers and example API requests and responses. In short:
 
 * **Feedback → signals.** Each rating, set of vibe chips, pair of liked/disliked chips and text becomes normalised rows. Place vibe profiles are shrunk towards the place's own tags until enough feedback exists. Traveller preferences are recency-weighted, with a cold start. Two ranking components are added: `vibe` (user-specific, including aversions like "too crowded") and `community` (the place-level rating). Both are neutral without data.
-* **Events.** Stored records, Ticketmaster and Google Events are queried first, with a validated web search as the long-tail fallback. Results are normalised, checked against the dates and the destination's boundary, linked to known venues, de-duplicated, scored for confidence and freshness (expired events are removed), and ranked by time, distance, relevance, confidence and vibe. Nothing comes from the RAG store or the LLM, and an empty result stays empty.
+* **Events.** Stored records (including reviewed organiser submissions), official festival calendars, Ticketmaster (where it has coverage) and Google Events are queried first, with a validated web search as the long-tail fallback. Results are normalised, checked against the dates and the destination's boundary, linked to known venues, de-duplicated, scored for confidence and freshness (expired events are removed), and ranked by time, distance, relevance, confidence and vibe. Nothing comes from the RAG store or the LLM, and an empty result stays empty.
 * **Synthetic bootstrap feedback.** 800 records, clearly labelled, are loaded for development. Set `AUTO_SEED_FEEDBACK=false` and `FEEDBACK_INCLUDE_SYNTHETIC=false` to exclude them.
 
 ## How a question is answered
@@ -122,6 +123,8 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 | Intent cue phrases, radii, query expansions | `backend/data/config/intents.json` |
 | Ranking weights, dedup, source priority, entity-resolution weights | `backend/data/config/ranking.json` |
 | Itinerary speeds, fares, CO₂, presets | `backend/data/config/itinerary.json` |
+| City extent, city aliases, "city centre" phrases, geocoder bias | `backend/data/config/geo.json` |
+| Official festival/holiday calendars | `backend/data/sources/festival_calendars/*.json` |
 | Destination packs (destination, POIs, knowledge, facts, advisories, events, provenance) | `backend/data/packs/<name>/` |
 
 ### Organisers' dataset (PS-13)

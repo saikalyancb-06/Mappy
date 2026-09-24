@@ -38,6 +38,8 @@
     "_comment": "Reliability 0..1 by kind of source. Domains are matched by suffix/substring; they describe kinds of sources, not events.",
     "stored_curated": 0.8,
     "stored_dataset": 0.55,
+    "official_calendar": 0.85,
+    "stored_submission": 0.7,
     "ticketmaster": 0.9,
     "google_events": 0.65,
     "web_authoritative": 0.85,

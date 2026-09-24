@@ -220,6 +220,44 @@ class EventFestival(Base):
     source_id = Column(String, nullable=True)  # the provider's own id, used to de-duplicate live listings
     source_published_at = Column(String, nullable=True)
     last_verified_at = Column(String, nullable=True)  # when a source last confirmed this record (ISO)
+    start_time = Column(String, nullable=True)  # "HH:MM" local, when the source states it
+    end_time = Column(String, nullable=True)
+    price_kind = Column(String, nullable=True)  # free | paid | donation | unknown, when the source states it
+
+
+class EventSubmission(Base):
+    """An event sent in by an organiser, venue or attendee. Nothing is shown until a moderator approves it."""
+
+    __tablename__ = "event_submissions"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False)  # organiser | venue | attendee
+    organiser_name = Column(String, nullable=False)
+    contact_email = Column(String, nullable=False)  # private: moderators only, never published
+    destination_id = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, nullable=False)
+    start_date = Column(String, nullable=False)
+    end_date = Column(String, nullable=False)
+    start_time = Column(String, nullable=True)
+    end_time = Column(String, nullable=True)
+    venue_name = Column(String, nullable=False)
+    venue_address = Column(String, nullable=True)
+    venue_lat = Column(Float, nullable=True)
+    venue_lon = Column(Float, nullable=True)
+    price_kind = Column(String, nullable=False, default="unknown")  # free | paid | donation | unknown
+    price_min = Column(String, nullable=True)  # decimal text
+    currency = Column(String, nullable=True)
+    ticket_url = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending", index=True)  # pending | approved | rejected
+    review_note = Column(Text, nullable=True)
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    event_id = Column(String, nullable=True)  # the published EventFestival row
+    created_at = Column(DateTime, default=utcnow)
 
 
 class WeatherDaily(Base):

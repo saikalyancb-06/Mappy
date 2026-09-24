@@ -26,9 +26,12 @@ from app.core.rules import load_rules
 from app.db.models import Destination
 from app.db.session import SessionLocal
 from app.geo.distance import haversine_km, valid_coordinates
-from app.geo.geocoding import ResolvedPlace, destination_to_place, nearest_destination, resolve_place
+from app.core.text import normalize
+from app.geo.geocoding import ResolvedPlace, city_extent_km, destination_to_place, nearest_destination, resolve_place
 
 DEFAULT_PLACE_RADIUS_KM = 2.0
+CENTRE_SHARE_OF_CITY = 0.25  # "the centre" of a city is the inner quarter of its extent …
+CENTRE_RADIUS_KM = (2.0, 6.0)  # … kept between a walkable 2 km and 6 km
 _ALLOWED_SOURCES = {"device", "selected_map_location"}
 
 
@@ -172,7 +175,41 @@ def load_destination(raw: dict[str, Any] | str | None) -> tuple[ResolvedPlace | 
     return None, []
 
 
+def is_centre_phrase(mention: str | None) -> bool:
+    """'city centre', 'downtown', 'the center' … mean the centre of the current city, not a place called that."""
+    return bool(mention) and normalize(mention) in {normalize(p) for p in load_rules("geo")["centre_phrases"]}
+
+
+def city_centre(active: ResolvedPlace | None, location: UserLocation | None) -> tuple[ResolvedPlace | None, list[dict[str, str]]]:
+    """The centre of the city being explored, or of the city the traveller is in."""
+    from app.geo.city import resolve_city  # local import: app.geo.city imports this module
+
+    if active is not None:
+        name, lat, lon, destination_id, region, country, tz = active.city or active.name, active.lat, active.lon, active.destination_id, active.region, active.country, active.timezone
+        errors: list[dict[str, str]] = []
+    elif location is not None:
+        city, errors = resolve_city(lat=location.lat, lon=location.lon)
+        if city is None:
+            return None, errors
+        name, lat, lon, destination_id, region, country, tz = city.name, city.lat, city.lon, city.destination_id, city.region, city.country, city.timezone
+        if destination_id is None:
+            # A city known only from reverse geocoding: its centre is where the geocoder places the city.
+            place, more = resolve_place(city.name if not city.country else f"{city.name}, {city.country}", near=(location.lat, location.lon))
+            errors = [*errors, *more]
+            if place is None or place.kind != "geocoded":
+                return None, errors
+            lat, lon = place.lat, place.lon
+    else:
+        return None, []
+    destination = destination_by_id(destination_id)
+    extent = city_extent_km(destination) if destination else float(getattr(active, "coverage_radius_km", None) or 8.0)
+    radius = round(min(CENTRE_RADIUS_KM[1], max(CENTRE_RADIUS_KM[0], CENTRE_SHARE_OF_CITY * extent)), 1)
+    return ResolvedPlace(name=f"{name} centre", lat=lat, lon=lon, kind="centre", coverage_radius_km=radius, city=name, region=region, country=country, destination_id=destination_id, timezone=tz, source="city_centre", confidence=0.9), errors
+
+
 def _destination_reference(place: ResolvedPlace, origin: str) -> ActiveReference:
+    if place.kind == "centre":
+        return ActiveReference(origin=origin, lat=place.lat, lon=place.lon, label=place.name, radius_km=float(place.coverage_radius_km or CENTRE_RADIUS_KM[0]), semantic="near_place", destination_id=place.destination_id)
     if place.kind == "poi":
         return ActiveReference(origin=origin, lat=place.lat, lon=place.lon, label=place.name, radius_km=DEFAULT_PLACE_RADIUS_KM, semantic="near_place", destination_id=place.destination_id)
     return ActiveReference(origin=origin, lat=place.lat, lon=place.lon, label=place.name, radius_km=float(place.coverage_radius_km or 10.0), semantic="in_destination", destination_id=place.destination_id)
@@ -190,14 +227,24 @@ def build_geo_context(
     active, errors = load_destination(active_destination)
     context = GeoContext(user_location=location, location_status=status, active_destination=active, warnings=list(warnings), provider_errors=list(errors))
 
-    if place_mention:
-        near = context.user_point() or ((active.lat, active.lon) if active else None)
+    if place_mention and is_centre_phrase(place_mention):
+        centre, centre_errors = city_centre(active, location)
+        context.provider_errors.extend(centre_errors)
+        if centre:
+            context.query_destination = centre
+        else:
+            context.warnings.append("Which city's centre? Choose a destination or turn on your location.")
+            context.reference_required = "location_or_destination"
+            return context
+    elif place_mention:
+        # Look names up around the destination being explored, else around the traveller.
+        near = ((active.lat, active.lon) if active else None) or context.user_point()
         resolved, resolve_errors = resolve_place(place_mention, near=near)
         context.provider_errors.extend(resolve_errors)
         if resolved:
             context.query_destination = resolved
         else:
-            context.warnings.append(f"I could not find a place called “{place_mention}”.")
+            context.warnings.append(f"I could not find a place called “{place_mention}” near here.")
 
     rules = load_rules("intents")
     near_me_radius = float(radius_km or rules["near_me_radius_km"])
@@ -213,7 +260,7 @@ def build_geo_context(
     # Rule 1: an explicit place in the question wins.
     if context.query_destination:
         reference = _destination_reference(context.query_destination, "query_destination")
-        if spatial_relation == "near_place" and context.query_destination.kind != "destination":
+        if spatial_relation == "near_place" and context.query_destination.kind not in {"destination", "centre"}:
             reference.semantic = "near_place"
             reference.radius_km = float(radius_km or DEFAULT_PLACE_RADIUS_KM)
         elif radius_km:

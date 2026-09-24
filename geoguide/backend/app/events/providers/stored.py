@@ -27,8 +27,16 @@ def _day(value: str | None) -> date | None:
         return None
 
 
+def _clock(value: str | None) -> time | None:
+    try:
+        return time.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
 class StoredEventProvider(EventProvider):
     name, label = "stored", "Stored events and festivals (curated + organiser dataset)"
+    local = True
 
     def search_events(self, query: EventQuery) -> ProviderResult:
         started = self._timed()
@@ -52,6 +60,7 @@ class StoredEventProvider(EventProvider):
             if not start_day:
                 result.drop("no_date")
                 continue
+            starts, ends = _clock(row.start_time) or time(0, 0), _clock(row.end_time) or time(23, 59)
             legacy = rules["provider_categories"]["legacy"].get(row.category or "")
             category, categories, kind = categorise(row.title, row.summary, "dataset", [row.category] if row.category else None)
             if legacy and legacy != "other":
@@ -59,13 +68,19 @@ class StoredEventProvider(EventProvider):
                 categories = list(dict.fromkeys([legacy, *categories]))
             kind = row.event_type if row.event_type in {"festival", "event", "live"} else kind
             curated = row.data_source_id != "ps13"
-            price_kind, price_min, currency = ("paid", row.ticket_price, row.currency) if row.is_ticketed else price_from_text(row.summary)
-            source = EventSource(provider=self.name, name=row.source or ("Curated pack" if curated else "Organiser dataset"), kind="stored_curated" if curated else "stored_dataset",
-                                 reliability=rules["sources"]["stored_curated" if curated else "stored_dataset"], source_event_id=row.id, url=row.source_url,
+            source_kind = "stored_submission" if row.data_source_id == "submission" else "stored_curated" if curated else "stored_dataset"
+            if row.price_kind in {"free", "donation"}:
+                price_kind, price_min, currency = row.price_kind, "0.00" if row.price_kind == "free" else None, None
+            elif row.is_ticketed or row.price_kind == "paid":
+                price_kind, price_min, currency = "paid", row.ticket_price, row.currency
+            else:
+                price_kind, price_min, currency = price_from_text(row.summary)
+            source = EventSource(provider=self.name, name=row.source or ("Curated pack" if curated else "Organiser dataset"), kind=source_kind,
+                                 reliability=rules["sources"][source_kind], source_event_id=row.id, url=row.source_url,
                                  last_updated=row.last_verified_at or (row.updated_at.isoformat() + "Z" if row.updated_at else None))
             result.events.append(NormalisedEvent(
-                title=row.title, description=row.summary, start=datetime.combine(start_day, time(0, 0), tzinfo=query.tz), end=datetime.combine(end_day, time(23, 59), tzinfo=query.tz),
-                timezone=query.city.timezone or "UTC", all_day=True, time_known=False, source=source, category=category, categories=categories,
+                title=row.title, description=row.summary, start=datetime.combine(start_day, starts, tzinfo=query.tz), end=datetime.combine(end_day, ends, tzinfo=query.tz),
+                timezone=query.city.timezone or "UTC", all_day=not row.start_time, time_known=bool(row.start_time), source=source, category=category, categories=categories,
                 type="festival" if kind == "festival" else "event", venue_name=row.venue_name, lat=row.venue_lat, lon=row.venue_lon, city=query.city.name,
                 event_url=row.source_url, price_kind=price_kind, price_min=price_min, currency=currency, recurrence=row.recurrence,
                 significance=row.significance, traditions=row.traditions, etiquette=row.etiquette, expected_footfall=row.expected_footfall, freshness="stored",

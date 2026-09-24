@@ -32,6 +32,7 @@ class ProviderResult:
 class EventProvider(ABC):
     name: str = "provider"
     label: str = "Provider"
+    local: bool = False  # stored/official records: usable for past dates and linked to the city, not to a radius
 
     @property
     def configured(self) -> bool:

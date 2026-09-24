@@ -1,0 +1,32 @@
+{
+  "_comment": "How GeoGuide decides which city a point belongs to and how it reads place names. city_extent sizes a city for location detection from its population (radius = km_per_sqrt_million * sqrt(population in millions), never smaller than the dataset coverage). Retrieval radii are unchanged. Aliases are other common names for stored destinations. centre_phrases and generic_words stop generic words from being geocoded as if they were unique place names.",
+  "city_extent": {"km_per_sqrt_million": 6.0, "max_km": 30.0},
+  "destination_aliases": {
+    "Bengaluru": ["Bangalore", "Bengaluru City", "Blr"],
+    "Mumbai": ["Bombay"],
+    "Kolkata": ["Calcutta"],
+    "Chennai": ["Madras"],
+    "Mysuru": ["Mysore"],
+    "New Delhi": ["Delhi"],
+    "Pondicherry": ["Puducherry", "Pondy"],
+    "Thiruvananthapuram": ["Trivandrum"],
+    "Kochi": ["Cochin", "Ernakulam"],
+    "Alleppey": ["Alappuzha"],
+    "Visakhapatnam": ["Vizag"],
+    "Varanasi": ["Banaras", "Benares", "Kashi"],
+    "Panaji": ["Panjim"],
+    "Ooty": ["Udhagamandalam", "Ootacamund"],
+    "Thanjavur": ["Tanjore"],
+    "Madurai": ["Madura"],
+    "Male": ["Malé"],
+    "Bali": ["Denpasar"]
+  },
+  "centre_phrases": ["city center", "city centre", "the city center", "the city centre", "center", "centre", "the center", "the centre", "downtown", "town center", "town centre", "central", "central area", "heart of the city", "main city", "city", "the city", "cbd", "central business district"],
+  "generic_words": ["city", "center", "centre", "central", "main", "old", "new", "town", "downtown", "market", "bus", "stand", "station", "railway", "metro", "airport", "mall", "beach", "temple", "park", "lake", "fort", "palace", "museum", "church", "mosque", "road", "street", "circle", "junction", "square", "area", "the", "a", "nearest", "nearby", "local", "big", "famous"],
+  "nominatim": {
+    "language": "en",
+    "local_bias_km": 60,
+    "far_accept_types": ["city", "town", "village", "hamlet", "municipality", "island", "county", "state", "province", "region", "country", "state_district", "administrative"],
+    "far_min_importance": 0.5
+  }
+}

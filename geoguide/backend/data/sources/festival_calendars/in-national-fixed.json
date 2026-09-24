@@ -1,0 +1,32 @@
+{
+  "id": "in-national-fixed",
+  "title": "National days of India (fixed dates)",
+  "authority": "Government of India",
+  "document": "National holidays fixed by date: Republic Day, Independence Day and Gandhi Jayanti",
+  "source_url": "https://www.india.gov.in/",
+  "country": "IN",
+  "regions": [],
+  "verification": "Fixed-date national days; they fall on the same date every year.",
+  "verified_on": "2026-09-24",
+  "note": "National holiday observed across India.",
+  "entries": [
+    {
+      "title": "Republic Day",
+      "annual": "01-26",
+      "category": "cultural",
+      "kind": "national_day"
+    },
+    {
+      "title": "Independence Day",
+      "annual": "08-15",
+      "category": "cultural",
+      "kind": "national_day"
+    },
+    {
+      "title": "Gandhi Jayanti",
+      "annual": "10-02",
+      "category": "cultural",
+      "kind": "national_day"
+    }
+  ]
+}

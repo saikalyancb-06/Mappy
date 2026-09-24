@@ -21,6 +21,7 @@ from app.core.text import normalize, tokens
 from app.events.model import EventQuery, NormalisedEvent, day_bounds, zone
 from app.events.providers.base import EventProvider, ProviderResult
 from app.events.providers.google_events import GoogleEventsProvider
+from app.events.providers.calendar import CalendarProvider
 from app.events.providers.stored import StoredEventProvider
 from app.events.providers.ticketmaster import TicketmasterProvider
 from app.events.providers.web import WebEventProvider
@@ -63,8 +64,11 @@ def build_query(city: City, window: DateRange, *, mode: str = "destination", use
                       free_only=free_only, festival_only=festival_only, user=user or {}, user_point=user_point, limit=limit, include_live=include_live)
 
 
+LOCAL_PROVIDERS = {"stored", "calendar"}
+
+
 def default_providers(web: SerpApiClient | None = None) -> list[EventProvider]:
-    return [StoredEventProvider(), TicketmasterProvider(), GoogleEventsProvider(web), WebEventProvider(web)]
+    return [StoredEventProvider(), CalendarProvider(), TicketmasterProvider(), GoogleEventsProvider(web), WebEventProvider(web)]
 
 
 def _time_score(event: NormalisedEvent, query: EventQuery, now: datetime) -> float:
@@ -157,7 +161,7 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
             note = load_rules("events").get("provider_coverage", {}).get(provider.name, {}).get("skip_note", "{country}: not covered; skipped.")
             results.append(ProviderResult(provider.name, provider.label, status="not_applicable", error={"source": provider.name, "code": "no_coverage", "message": note.format(country=query.city.country or country_code(query.city) or "this country")}))
             return
-        if provider.name != "stored" and query.end < now:
+        if not provider.local and query.end < now:
             results.append(ProviderResult(provider.name, provider.label, status="not_applicable", error={"source": provider.name, "code": "past_dates", "message": "Live listings only cover today onwards; past dates use stored records."}))
             return
         try:
@@ -166,7 +170,7 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
             logger.warning("event_provider_failed provider=%s error=%s", provider.name, type(exc).__name__)
             results.append(ProviderResult(provider.name, provider.label, status="error", error={"source": provider.name, "code": "provider_failure", "message": "The provider failed unexpectedly."}))
 
-    structured = [p for p in providers if p.name != "web" and (query.include_live or p.name == "stored")]
+    structured = [p for p in providers if p.name != "web" and (query.include_live or p.local)]
     for provider in structured:
         run(provider)
     fallback = [p for p in providers if p.name == "web"]
@@ -192,7 +196,7 @@ def find_events(query: EventQuery, providers: list[EventProvider] | None = None,
         if event.lat is not None and event.lon is not None:
             distance = haversine_km(query.centre[0], query.centre[1], event.lat, event.lon)
             # Stored records are linked to their city; live/web results must fall inside the search boundary.
-            if distance > query.radius_km and (event.source.provider != "stored" or query.mode == "near_me"):
+            if distance > query.radius_km and (event.source.provider not in LOCAL_PROVIDERS or query.mode == "near_me"):
                 counts["outside_area"] += 1
                 continue
             point = query.user_point if query.user_point else query.centre

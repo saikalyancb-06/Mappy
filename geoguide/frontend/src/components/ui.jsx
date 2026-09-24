@@ -190,8 +190,9 @@ export function EventCard({ event }) {
       {(price || event.crowded) && <p className="event-meta"><Ticket size={13} />{[price, event.crowded ? 'Large crowds expected' : null].filter(Boolean).join(' · ')}</p>}
       {event.confidence_label === 'low' && <p className="event-warning">Unverified listing — check the source before going.</p>}
       {event.freshness === 'stale' && <p className="event-warning">This listing hasn't been re-checked recently.</p>}
-      <small className="event-source">Source: {source.name || 'stored record'}{event.sources?.length > 1 ? ` + ${event.sources.length - 1} more` : ''}{checked ? ` · checked ${checked}` : ''}</small>
-      {link && <div className="event-actions"><a className="secondary-button small" href={link} target="_blank" rel="noopener noreferrer">Open event page</a>{event.ticket_url && event.ticket_url !== link && <a className="link-button" href={event.ticket_url} target="_blank" rel="noopener noreferrer">Tickets</a>}</div>}
+      {source.kind === 'official_calendar' && <p className="event-meta">Official holiday calendar · celebrated across the city, no single venue</p>}
+      <small className="event-source">{source.kind === 'stored_submission' ? 'Submitted by the organiser, reviewed by GeoGuide · ' : ''}Source: {source.name || 'stored record'}{event.sources?.length > 1 ? ` + ${event.sources.length - 1} more` : ''}{checked ? ` · checked ${checked}` : ''}</small>
+      {link && <div className="event-actions"><a className="secondary-button small" href={link} target="_blank" rel="noopener noreferrer">{source.kind === 'official_calendar' ? 'View official calendar' : 'Open event page'}</a>{event.ticket_url && event.ticket_url !== link && <a className="link-button" href={event.ticket_url} target="_blank" rel="noopener noreferrer">Tickets</a>}</div>}
     </div>
   </article>
 }
