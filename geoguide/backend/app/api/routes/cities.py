@@ -7,6 +7,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.cities.enrichment import enqueue_enrichment, is_running
+from app.cities.offline import build_offline_pack
 from app.cities.registry import components_config, missing_components
 from app.cities.service import city_knowledge, city_places, city_status, ensure_city
 from app.db.models import Destination
@@ -46,6 +47,15 @@ def places(destination_id: str, category: str | None = Query(None, max_length=40
     if city_status(destination_id) is None:
         raise HTTPException(status_code=404, detail="Unknown destination.")
     return city_places(destination_id, category=category, kind=kind, profile=resolve_profile(authorization), limit=limit, offset=offset)
+
+
+@router.get("/destinations/{destination_id}/offline-pack")
+def offline_pack(destination_id: str, authorization: str | None = Header(default=None)) -> dict:
+    """A compact bundle of the city for offline use (stored on the device by the app)."""
+    pack = build_offline_pack(destination_id, resolve_profile(authorization))
+    if pack is None:
+        raise HTTPException(status_code=404, detail="Unknown destination.")
+    return pack
 
 
 @router.post("/destinations/{destination_id}/enrich")
