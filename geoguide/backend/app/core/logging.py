@@ -17,6 +17,9 @@ def configure_logging() -> None:
     if _CONFIGURED:
         return
     logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # httpx logs full request URLs at INFO, and provider keys travel as query parameters: never log them.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     _CONFIGURED = True
 
 

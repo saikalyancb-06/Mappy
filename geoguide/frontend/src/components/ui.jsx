@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   AlertTriangle,
   ArrowRight,
@@ -102,6 +103,7 @@ export function PlaceCard({ place, featured = false, onOpen, saved = false, onSa
       <PlaceFacts place={place} />
       <ConfidenceBadge place={place} />
       <ConflictNote place={place} />
+      {place.community?.from_feedback && place.community.top_vibes?.length > 0 && <p className="community-line">Visitors say: {place.community.top_vibes.map((v) => v.replace('_', ' ')).join(' · ')}</p>}
       {place.reasons?.length > 0 && <p>{place.reasons.slice(0, 2).join(' · ')}</p>}
       {onOpen && <button className="text-action" onClick={() => onOpen(place)} type="button">Why this place <ArrowRight size={16} /></button>}
     </div>
@@ -159,23 +161,37 @@ export function AdvisoryList({ advisories }) {
 
 const eventDates = (event) => (event.start_date === event.end_date ? formatDay(event.start_date) : `${formatDay(event.start_date, false)} → ${formatDay(event.end_date)}`)
 
+const priceLabel = (event) => {
+  const price = event.price || {}
+  if (price.kind === 'free') return 'Free'
+  if (price.kind === 'donation') return 'By donation'
+  if (price.kind === 'paid') return price.min ? `From ${formatMoney(price.min, price.currency)}` : 'Ticketed'
+  return event.is_ticketed ? (event.ticket_price ? `From ${formatMoney(event.ticket_price, event.currency)}` : 'Ticketed') : null
+}
+
 export function EventCard({ event }) {
+  const [imageFailed, setImageFailed] = useState(false)
   const source = event.source || {}
   const start = event.start_date ? new Date(`${event.start_date}T12:00:00`) : null
-  const verified = source.last_verified_at ? formatDay(source.last_verified_at.slice(0, 10)) : null
-  const ticket = event.is_ticketed ? (event.ticket_price ? `Ticketed · from ${formatMoney(event.ticket_price, event.currency)}` : 'Ticketed') : event.is_ticketed === false ? 'Free entry' : null
-  return <article className={`event-card ${event.type === 'festival' ? 'festival' : ''}`}>
-    <div className="event-date" aria-hidden="true">{start && <><strong>{start.getDate()}</strong><span>{start.toLocaleDateString('en-GB', { month: 'short' })}</span></>}</div>
+  const checked = source.last_verified_at ? formatDay(source.last_verified_at.slice(0, 10)) : null
+  const link = event.event_url || source.url || event.ticket_url
+  const price = priceLabel(event)
+  const unconfirmed = event.timing === 'usually_this_time_of_year'
+  return <article className={`event-card ${event.type === 'festival' ? 'festival' : ''} ${event.confidence_label === 'low' ? 'low-confidence' : ''}`}>
+    {event.image_url && !imageFailed ? <img className="event-image" src={event.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} /> : <div className="event-date" aria-hidden="true">{start && <><strong>{start.getDate()}</strong><span>{start.toLocaleDateString('en-GB', { month: 'short' })}</span></>}</div>}
     <div className="event-body">
-      <span className="category-label">{event.group_label}{event.type === 'festival' && event.category !== 'festival' ? ' · festival' : ''}{event.multi_day ? ' · multi-day' : ''}</span>
+      <span className="category-label">{event.group_label}{event.type === 'festival' && event.category !== 'festivals' ? ' · festival' : ''}{event.multi_day ? ' · multi-day' : ''}</span>
       <h3>{event.name}</h3>
-      <p className="event-meta"><CalendarDays size={13} /> {event.timing === 'usually_this_time_of_year' ? 'Usually around this time — dates not confirmed' : eventDates(event)}{event.venue?.name ? ` · ${event.venue.name}` : ''}{event.distance_km != null ? ` · ${formatDistance(event.distance_km)} from you` : ''}</p>
-      {event.description && <p>{event.description}</p>}
+      <p className="event-meta"><CalendarDays size={13} />{unconfirmed ? 'Usually around this time — dates not confirmed' : `${eventDates(event)}${event.start_time ? ` · ${event.start_time}` : ''}`}{event.venue?.name ? ` · ${event.venue.name}` : ''}{event.distance_km != null ? ` · ${formatDistance(event.distance_km)} away` : ''}</p>
+      {event.description && <p className="event-description">{event.description}</p>}
       {event.significance && <p><strong>Why it matters:</strong> {event.significance}</p>}
       {event.traditions && <p><strong>Traditions:</strong> {event.traditions}</p>}
       {event.etiquette && <p><strong>Etiquette:</strong> {event.etiquette}</p>}
-      {(ticket || event.crowded) && <p className="event-meta"><Ticket size={13} /> {[ticket, event.crowded ? 'Large crowds expected' : null].filter(Boolean).join(' · ')}</p>}
-      <small className="event-source">Source: {source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer">{source.name || 'listing'}</a> : (source.name || 'stored record')}{verified ? ` · verified ${verified}` : ''}</small>
+      {(price || event.crowded) && <p className="event-meta"><Ticket size={13} />{[price, event.crowded ? 'Large crowds expected' : null].filter(Boolean).join(' · ')}</p>}
+      {event.confidence_label === 'low' && <p className="event-warning">Unverified listing — check the source before going.</p>}
+      {event.freshness === 'stale' && <p className="event-warning">This listing hasn't been re-checked recently.</p>}
+      <small className="event-source">Source: {source.name || 'stored record'}{event.sources?.length > 1 ? ` + ${event.sources.length - 1} more` : ''}{checked ? ` · checked ${checked}` : ''}</small>
+      {link && <div className="event-actions"><a className="secondary-button small" href={link} target="_blank" rel="noopener noreferrer">Open event page</a>{event.ticket_url && event.ticket_url !== link && <a className="link-button" href={event.ticket_url} target="_blank" rel="noopener noreferrer">Tickets</a>}</div>}
     </div>
   </article>
 }

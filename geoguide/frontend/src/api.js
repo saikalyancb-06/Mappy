@@ -79,7 +79,14 @@ export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/
 export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)
 // City + date context: changing the date re-runs events, weather, season, tips and the briefing.
 export const getCityContext = (context, { date, language = 'en' } = {}) => request(`/api/context${contextParams(context, { date, language })}`)
-export const getEvents = (context, { date, when, end } = {}) => request(`/api/events${contextParams(context, { date, when, end })}`)
+export const getEvents = (context, { date, when, end, q, category, free, festival, near, radiusKm } = {}) => request(`/api/events${contextParams(context, { date, when, end, q, category, free: free ? 'true' : null, festival: festival ? 'true' : null, near, radius_km: radiusKm })}`)
+export const getEventsOverview = (context, { date, near } = {}) => request(`/api/events/overview${contextParams(context, { date, near })}`)
+
+// ---- feedback & vibes ----
+export const getFeedbackVocabulary = () => request('/api/feedback/vocabulary')
+export const submitFeedback = (feedback) => request('/api/feedback', { method: 'POST', body: JSON.stringify(feedback) })
+export const getPlaceCommunity = (placeId) => request(`/api/places/${encodeURIComponent(placeId)}/community`)
+export const getMyVibes = () => request('/api/me/vibes')
 export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm, text, rankingMode, travelMode, withinBudget } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm, text, ranking_mode: rankingMode, travel_mode: travelMode, within_budget: withinBudget ? 'true' : null })}`)
 export const getHotels = (context, { origin = 'auto', sort = 'best', checkIn, nights, maxPrice, minStars, withinBudget } = {}) => request(`/api/hotels${contextParams(context, { origin, sort, check_in: checkIn, nights, max_price: maxPrice, min_stars: minStars, within_budget: withinBudget ? 'true' : null })}`)
 export const searchPlaces = (context, q, kind = null) => request(`/api/search${contextParams(context, { q, kind })}`)

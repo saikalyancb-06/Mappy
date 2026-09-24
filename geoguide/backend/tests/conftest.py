@@ -27,6 +27,7 @@ os.environ.update({
     "GROQ_API_KEY": "",
     "SERPAPI_KEY": "",
     "AUTO_SEED_PACKS": "true",
+    "AUTO_SEED_FEEDBACK": "false",
     "APP_ENV": "test",
     "LLM_QUERY_PARSING": "false",
 })

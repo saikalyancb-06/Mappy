@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, RefreshCw, UtensilsCrossed, Volume2 } from 'lucide-react'
-import { getCityContext, getEvents, getHotels, getNearby } from '../api'
+import { getCityContext, getEventsOverview, getHotels, getNearby } from '../api'
 import RichText from '../components/RichText'
 import SearchBox from '../components/SearchBox'
 import { AdvisoryList, Chip, EventCard, IconCircleButton, Notices, PlaceCard, SectionTitle, StateMessage, TipList } from '../components/ui'
@@ -11,7 +11,6 @@ const MODES = [
   ['overview', 'Overview'], ['happening', "What's happening"], ['todo', 'Things to do'], ['food', 'Food'],
   ['hotels', 'Hotels'], ['history', 'History'], ['culture', 'Culture'], ['ask', 'Ask GeoGuide'],
 ]
-const RANGES = [['day', 'This day', null], ['weekend', 'Weekend', 'this weekend'], ['week', 'Next 7 days', 'this week']]
 const SPEECH_LANG = { en: 'en-IN', kn: 'kn-IN', hi: 'hi-IN' }
 
 const firstSentences = (text, count = 2) => (text || '').split(/(?<=[.!?])\s+/).slice(0, count).join(' ')
@@ -65,11 +64,12 @@ function DateBar({ selected, today, onChange }) {
 
 export default function ExploreView({ context, language, selectedDate, onDateChange, onOpen, onSave, savedIds, onAsk, onGoNearby, onChooseDestination }) {
   const [mode, setMode] = useState('overview')
-  const [range, setRange] = useState('day')
+  const [eventsNear, setEventsNear] = useState('destination') // destination | me
+  const [eventTab, setEventTab] = useState(null)
   const [ctx, loadContext] = useLatest(useCallback(() => getCityContext(context, { date: selectedDate, language }), [context, selectedDate, language]))
   const selected = ctx.data?.date?.selected || selectedDate
   const origin = context.destination ? 'destination' : 'auto'
-  const [events, loadEvents] = useLatest(useCallback(() => getEvents(context, { date: selected, when: RANGES.find(([id]) => id === range)?.[2] }), [context, selected, range]))
+  const [events, loadEvents] = useLatest(useCallback(() => getEventsOverview(context, { date: selected, near: eventsNear === 'me' ? 'me' : null }), [context, selected, eventsNear]))
   const [food, loadFood] = useLatest(useCallback(() => getNearby(context, { origin, group: 'food' }), [context, origin]))
   const [hotels, loadHotels] = useLatest(useCallback(() => getHotels(context, { origin }), [context, origin]))
 
@@ -154,22 +154,28 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
     </>}
 
     {data && mode === 'happening' && <>
-      <div className="segmented three">{RANGES.map(([id, label]) => <button key={id} type="button" className={range === id ? 'active' : ''} onClick={() => setRange(id)}>{label}</button>)}</div>
+      <div className="segmented">
+        <button type="button" className={eventsNear === 'destination' ? 'active' : ''} onClick={() => setEventsNear('destination')}>In {city.name}</button>
+        <button type="button" className={eventsNear === 'me' ? 'active' : ''} disabled={!context.userLocation} onClick={() => setEventsNear('me')}>Near me</button>
+      </div>
       {events.loading && <div className="skeleton-card short" />}
       {events.error && <StateMessage title="Could not load events" body={events.error} />}
-      {events.data && !events.loading && <>
-        <p className="muted-text">{city.name} · {events.data.range.label}</p>
-        {events.data.events.length === 0 && <div className="empty-events"><strong>No verified events</strong><p>{events.data.message}</p></div>}
-        {events.data.groups.map((group) => <section key={group.id} className="event-group">
-          <SectionTitle eyebrow={`${group.event_ids.length} ${group.event_ids.length === 1 ? 'event' : 'events'}`}>{group.label}</SectionTitle>
-          <div className="event-list">{events.data.events.filter((e) => group.event_ids.includes(e.id)).map((event) => <EventCard key={event.id} event={event} />)}</div>
-        </section>)}
-        {events.data.associated_festivals.length > 0 && <>
-          <SectionTitle eyebrow="Associated with this city">Dates not confirmed for this period</SectionTitle>
-          <div className="event-list">{events.data.associated_festivals.map((event) => <EventCard key={event.id} event={event} />)}</div>
-        </>}
-        <details className="sources-checked"><summary>Sources checked</summary><ul>{events.data.sources_checked.map((s) => <li key={s.source}>{s.source}: {s.status === 'ok' ? `checked${s.kept != null ? ` (${s.kept} kept of ${s.found})` : ''}` : s.status === 'not_configured' ? 'not configured on this server' : s.status === 'not_applicable' ? s.reason : `unavailable${s.error?.message ? ` — ${s.error.message}` : ''}`}</li>)}</ul></details>
-      </>}
+      {events.data && !events.loading && (() => {
+        const tabs = events.data.tabs || []
+        const active = tabs.find((tab) => tab.id === eventTab) || tabs[0]
+        const shown = active ? events.data.events.filter((event) => active.event_ids.includes(event.id)) : []
+        return <>
+          <p className="muted-text">{events.data.city.name} · next {events.data.range.label} · {events.data.area.mode === 'near_me' ? `within ${events.data.area.radius_km} km of you` : `within ${events.data.area.radius_km} km of the centre`}</p>
+          {tabs.length > 0 && <div className="chip-row" role="tablist" aria-label="Event filters">{tabs.map((tab) => <Chip key={tab.id} active={active?.id === tab.id} onClick={() => setEventTab(tab.id)}>{tab.label} · {tab.count}</Chip>)}</div>}
+          {!tabs.length && <div className="empty-events"><strong>No verified events</strong><p>{events.data.message}</p></div>}
+          <div className="event-list">{shown.map((event) => <EventCard key={event.id} event={event} />)}</div>
+          {events.data.associated_festivals.length > 0 && <>
+            <SectionTitle eyebrow="Associated with this city">Dates not confirmed for this period</SectionTitle>
+            <div className="event-list">{events.data.associated_festivals.map((event) => <EventCard key={event.id} event={event} />)}</div>
+          </>}
+          <details className="sources-checked"><summary>Sources checked</summary><ul>{events.data.sources_checked.map((s) => <li key={s.provider}>{s.source}: {s.status === 'ok' ? `checked (${s.kept} of ${s.found} kept${s.cached ? ', cached' : ''})` : s.status === 'not_configured' ? 'not configured on this server' : s.status === 'not_applicable' ? s.error?.message : `unavailable${s.error?.message ? ` — ${s.error.message}` : ''}`}</li>)}</ul></details>
+        </>
+      })()}
     </>}
 
     {data && mode === 'todo' && <div className="place-list">{data.attractions.map((place, index) => <PlaceCard key={place.id} place={place} featured={index === 0} onOpen={onOpen} onSave={onSave} saved={savedIds.includes(place.id)} />)}</div>}

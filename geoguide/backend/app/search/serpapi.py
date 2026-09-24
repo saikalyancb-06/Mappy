@@ -58,6 +58,8 @@ class SearchResult:
     event_date: str | None = None  # the provider's display text, e.g. "Thu, Oct 22, 7 – 10 PM"
     event_start: str | None = None  # the provider's start day, e.g. "Oct 22"
     venue_name: str | None = None
+    ticket_url: str | None = None
+    image_url: str | None = None
     price_per_night: str | None = None  # exact decimal text from the provider's extracted rate
     price_currency: str | None = None
     hotel_class: int | None = None
@@ -199,6 +201,9 @@ class SerpApiClient:
                 event_start = date.get("start_date")
                 date = None
             venue = item.get("venue") if isinstance(item.get("venue"), dict) else {}
+            tickets = [t for t in item.get("ticket_info") or [] if isinstance(t, dict) and str(t.get("link", "")).startswith("http")]
+            ticket = next((t for t in tickets if t.get("link_type") == "tickets"), tickets[0] if tickets else None)
+            image = item.get("image") or item.get("thumbnail")
             address = item.get("address")
             if isinstance(address, list):
                 address = ", ".join(str(part) for part in address)
@@ -226,6 +231,8 @@ class SerpApiClient:
                 event_date=event_date,
                 event_start=event_start,
                 venue_name=venue.get("name"),
+                ticket_url=ticket.get("link") if ticket else None,
+                image_url=image if isinstance(image, str) and image.startswith("http") else None,
             ))
             if len(results) >= limit:
                 break

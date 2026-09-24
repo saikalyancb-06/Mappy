@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, LogOut } from 'lucide-react'
+import { getMyVibes } from '../api'
 import { Chip, SectionTitle } from '../components/ui'
 import { titleCase } from '../format'
 
 export default function ProfileView({ user, config, preferences, onSave, onLogout }) {
   const [draft, setDraft] = useState(preferences)
   const [status, setStatus] = useState('')
+  const [vibes, setVibes] = useState(null)
+  useEffect(() => { getMyVibes().then(setVibes).catch(() => setVibes(null)) }, [])
   const interests = Object.keys(draft.interests || {})
   const toggleInterest = (id) => setDraft((current) => {
     const next = { ...(current.interests || {}) }
@@ -27,6 +30,16 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
   return <div className="view-content">
     <header className="simple-header"><div><span className="eyebrow">Your preferences</span><h1>Profile</h1></div><div className="avatar">{(user?.name || '?')[0].toUpperCase()}</div></header>
     <div className="profile-card"><div className="profile-avatar">{(user?.name || '?')[0].toUpperCase()}</div><h2>{user?.name || 'Traveller'}</h2><p>{user?.email}</p></div>
+    <SectionTitle eyebrow="Learned from your feedback">Your vibe profile</SectionTitle>
+    {vibes && (vibes.status === 'cold_start'
+      ? <p className="muted-text">Rate a few places you visit ("How was this place?") and GeoGuide will learn the vibes you enjoy.</p>
+      : <div className="vibe-profile">
+        {vibes.liked_vibes.length > 0 && <p><strong>You enjoy</strong></p>}
+        <div className="chip-row wrap">{vibes.liked_vibes.map((vibe) => <span key={vibe.key} className="chip static active">{vibe.emoji} {vibe.label}</span>)}</div>
+        {vibes.disliked_vibes.length > 0 && <><p><strong>Less your thing</strong></p><div className="chip-row wrap">{vibes.disliked_vibes.map((vibe) => <span key={vibe.key} className="chip static">{vibe.emoji} {vibe.label}</span>)}</div></>}
+        {vibes.avoids.length > 0 && <p className="muted-text">You've flagged: {vibes.avoids.map((item) => item.label.toLowerCase()).join(', ')}</p>}
+        <p className="muted-text">Based on {vibes.feedback_count} place{vibes.feedback_count === 1 ? '' : 's'} you rated{vibes.status === 'emerging' ? ' — still learning' : ''}.</p>
+      </div>)}
     <SectionTitle eyebrow="Interests">What you care about</SectionTitle>
     <div className="chip-row wrap">{(config?.interests || []).map((item) => <Chip key={item.id} active={interests.includes(item.id)} onClick={() => toggleInterest(item.id)}>{interests.includes(item.id) && <Check size={14} />}{item.label}</Chip>)}</div>
     <SectionTitle eyebrow="Budget">How much to spend</SectionTitle>

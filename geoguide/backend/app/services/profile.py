@@ -57,4 +57,5 @@ def resolve_profile(authorization: str | None, override: dict[str, Any] | None =
             profile[key] = value
     if isinstance(profile.get("interests"), list):
         profile["interests"] = {item: 1 for item in profile["interests"]}
+    profile["user_id"] = user.id if user else None  # set from the verified token only, never from overrides
     return profile

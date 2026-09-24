@@ -33,6 +33,10 @@ AUTO_SEED_PACKS = _bool("AUTO_SEED_PACKS", True)
 # Organiser-provided dataset, imported on start-up when present.
 PS13_DB_PATH = Path(os.getenv("PS13_DB_PATH", str(DATA_DIR / "sources" / "ps13" / "PS-13.db")))
 AUTO_IMPORT_PS13 = _bool("AUTO_IMPORT_PS13", True)
+# Synthetic bootstrap feedback (development/demo only; clearly labelled). Production should set both to false.
+FEEDBACK_BOOTSTRAP_PATH = Path(os.getenv("FEEDBACK_BOOTSTRAP_PATH", str(DATA_DIR / "sources" / "feedback_bootstrap" / "feedback.jsonl")))
+AUTO_SEED_FEEDBACK = _bool("AUTO_SEED_FEEDBACK", True)
+FEEDBACK_INCLUDE_SYNTHETIC = _bool("FEEDBACK_INCLUDE_SYNTHETIC", True)
 
 # LLM (Groq, OpenAI-compatible)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

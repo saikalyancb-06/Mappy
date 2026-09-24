@@ -3,6 +3,7 @@ import { CheckCircle2, Clock3, Footprints, Layers, Leaf, Lock, PiggyBank, Sparkl
 import { buildPlan, getPlanDeck } from '../api'
 import SearchBox from '../components/SearchBox'
 import SwipeDeck from '../components/SwipeDeck'
+import FeedbackSheet from '../components/FeedbackSheet'
 import { Chip, Notices, SectionTitle, StateMessage, Understood } from '../components/ui'
 import { formatDistance, formatMinutes, formatMoney, titleCase } from '../format'
 
@@ -30,6 +31,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
   const [decisions, setDecisions] = useState({}) // id → 'like' | 'pass'
   const [history, setHistory] = useState([]) // decided ids, newest last, for undo
   const [deckBusy, setDeckBusy] = useState(false)
+  const [feedbackFor, setFeedbackFor] = useState(null) // a stop just marked done: "How was it?"
   const liked = Object.keys(decisions).filter((id) => decisions[id] === 'like')
   const passed = Object.keys(decisions).filter((id) => decisions[id] === 'pass')
 
@@ -73,7 +75,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
 
   // Re-optimise the rest of the plan from where the traveller actually is.
   const replanFrom = (state) => run({ replan: { previous: plan, completed_ids: [...done, ...(state.completed || [])], ...state } })
-  const markDone = (stop) => { setDone((current) => [...current, stop.poi_id]); replanFrom({ completed: [stop.poi_id], now: stop.depart }) }
+  const markDone = (stop) => { setDone((current) => [...current, stop.poi_id]); setFeedbackFor({ id: stop.poi_id, name: stop.name, category: stop.category }); replanFrom({ completed: [stop.poi_id], now: stop.depart }) }
 
   if (!context.destination && !context.userLocation) {
     return <div className="view-content"><header className="simple-header"><div><span className="eyebrow">Shape the day</span><h1>Your plan</h1></div></header><StateMessage title="Where should we plan?" body="Choose a destination or turn on your location to build a plan." action={<button className="secondary-button" onClick={onEnableLocation} type="button">Use my location</button>} /></div>
@@ -140,5 +142,6 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
       <Notices items={[...(plan.warnings || []), ...notices]} />
       {plan.unscheduled?.length > 0 && <details className="unscheduled"><summary>{plan.unscheduled.length} places didn't fit</summary><ul>{plan.unscheduled.map((item) => <li key={item.id}>{item.name} — {item.reason}</li>)}</ul></details>}
     </>}
+    {feedbackFor && <FeedbackSheet place={feedbackFor} onClose={() => setFeedbackFor(null)} />}
   </div>
 }

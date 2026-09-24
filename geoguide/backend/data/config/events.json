@@ -1,43 +1,88 @@
 {
-  "_comment": "City-and-date event rules. Events are scoped to a city and a date range, never to a radius. Keywords classify stored and live listings; nothing here names a specific city.",
-  "groups": {
-    "festival": {"label": "Festivals", "order": 1},
-    "music": {"label": "Music", "order": 2},
-    "culture": {"label": "Culture", "order": 3},
-    "arts": {"label": "Arts", "order": 4},
-    "sports": {"label": "Sports", "order": 5},
-    "food": {"label": "Food", "order": 6},
-    "family": {"label": "Family", "order": 7},
-    "markets": {"label": "Markets & fairs", "order": 8},
-    "outdoors": {"label": "Outdoors", "order": 9},
-    "nightlife": {"label": "Nightlife", "order": 10},
-    "other": {"label": "Other", "order": 11}
+  "_comment": "Event intelligence rules: taxonomy, provider category mappings, source reliability, query generation, freshness, geography and ranking weights. Events are fetched fresh from providers (never from the RAG store) and scoped to a destination or to the traveller. Nothing here names a specific city, venue or event.",
+  "categories": {
+    "music": {"label": "Music", "keywords": ["music", "concert", "gig", "live band", "orchestra", "symphony", "jazz", "rock", "carnatic", "hindustani", "dj", "sufi", "qawwali", "choir", "recital", "music nights"], "vibes": ["lively", "social", "youthful"]},
+    "festivals": {"label": "Festivals", "keywords": ["festival", "fest", "utsav", "utsava", "carnival", "jatre", "jatra", "celebration"], "vibes": ["lively", "cultural", "social"]},
+    "cultural": {"label": "Cultural", "keywords": ["cultural", "culture", "dance", "folk", "classical", "storytelling", "tradition", "traditional", "puppet"], "vibes": ["cultural", "aesthetic"]},
+    "heritage": {"label": "Heritage", "keywords": ["heritage", "heritage walk", "history walk", "fort", "palace", "monument", "archaeolog"], "vibes": ["cultural", "calm"]},
+    "food": {"label": "Food", "keywords": ["food", "culinary", "street food", "cooking", "tasting", "beer", "wine", "coffee", "brunch", "food week", "chef"], "vibes": ["social", "cozy", "lively"]},
+    "art": {"label": "Art", "keywords": ["art", "painting", "gallery", "sculpture", "craft", "crafts", "mural", "photography", "biennale", "design"], "vibes": ["aesthetic", "cultural", "calm"]},
+    "exhibition": {"label": "Exhibition", "keywords": ["exhibition", "exhibit", "expo", "showcase", "display"], "vibes": ["cultural", "calm", "aesthetic"]},
+    "theatre": {"label": "Theatre", "keywords": ["theatre", "theater", "play", "drama", "musical", "opera"], "vibes": ["cultural", "romantic"]},
+    "comedy": {"label": "Comedy", "keywords": ["comedy", "stand-up", "standup", "stand up", "improv", "open mic"], "vibes": ["social", "youthful", "lively"]},
+    "sports": {"label": "Sports", "keywords": ["marathon", "race", "run", "cricket", "football", "match", "tournament", "cup", "league", "cycling", "triathlon", "kabaddi", "hockey", "tennis"], "vibes": ["lively", "adventurous", "social"]},
+    "nightlife": {"label": "Nightlife", "keywords": ["nightlife", "party", "club night", "pub", "dj night", "rave", "bar crawl", "night market"], "vibes": ["nightlife", "lively", "youthful"]},
+    "workshops": {"label": "Workshops", "keywords": ["workshop", "class", "masterclass", "hands-on", "course", "bootcamp"], "vibes": ["cozy", "social"]},
+    "education": {"label": "Education", "keywords": ["lecture", "talk", "seminar", "literature", "literary", "book", "reading", "science", "library"], "vibes": ["cultural", "calm"]},
+    "technology": {"label": "Technology", "keywords": ["tech", "technology", "hackathon", "startup", "developer", "ai ", "summit", "conference"], "vibes": ["social", "youthful"]},
+    "business": {"label": "Business", "keywords": ["business", "networking", "trade fair", "b2b", "investor", "expo", "summit"], "vibes": ["social", "premium"]},
+    "family": {"label": "Family", "keywords": ["kids", "children", "family", "puppet", "zoo", "carnival", "fun fair", "magic show"], "vibes": ["family_friendly"]},
+    "community": {"label": "Community", "keywords": ["community", "meetup", "volunteer", "charity", "clean-up", "cleanup", "neighbourhood", "neighborhood"], "vibes": ["social", "peaceful"]},
+    "religious": {"label": "Religious", "keywords": ["temple", "puja", "pooja", "aarti", "mass", "prayer", "pilgrimage", "procession", "rathotsava", "car festival", "jatre"], "vibes": ["cultural", "calm", "peaceful"]},
+    "shopping": {"label": "Shopping", "keywords": ["shopping", "sale", "bazaar", "pop-up", "popup", "flea"], "vibes": ["shopping", "lively"]},
+    "markets": {"label": "Markets", "keywords": ["market", "mela", "fair", "haat", "flea market", "farmers market", "craft mela"], "vibes": ["shopping", "lively", "social"]},
+    "outdoor": {"label": "Outdoor", "keywords": ["outdoor", "open air", "park", "garden", "picnic", "boat race", "kite", "walk", "nature"], "vibes": ["scenic", "peaceful", "family_friendly"]},
+    "adventure": {"label": "Adventure", "keywords": ["trek", "hike", "climb", "rafting", "paragliding", "kayak", "adventure", "camp", "safari"], "vibes": ["adventurous", "scenic"]},
+    "other": {"label": "Other", "keywords": [], "vibes": []}
   },
-  "festival_keywords": ["festival of lights", "deepavali", "diwali", "dasara", "dussehra", "navaratri", "navratri", "durga puja", "ganesh", "ganesha chaturthi", "vinayaka", "pongal", "sankranti", "onam", "holi", "eid", "ramadan", "christmas", "easter", "ugadi", "gudi padwa", "karaga", "utsav", "utsava", "rathotsava", "rath yatra", "car festival", "temple festival", "jatre", "jatra", "harvest", "kite festival", "boat race", "lohri", "baisakhi", "bihu", "chhath", "janmashtami", "shivaratri", "vesak", "songkran", "loy krathong", "chinese new year", "lunar new year", "thaipusam", "diwali mela"],
-  "category_keywords": {
-    "music": ["music", "concert", "gig", "live band", "orchestra", "symphony", "jazz", "rock", "carnatic", "hindustani", "dj", "sufi", "qawwali"],
-    "arts": ["film", "cinema", "art", "exhibition", "gallery", "craft", "literature", "literary", "book", "photography", "biennale", "design week"],
-    "culture": ["heritage", "dance", "theatre", "theater", "drama", "performance", "cultural", "walk", "storytelling", "comedy", "stand-up", "standup", "poetry"],
-    "sports": ["marathon", "race", "run", "cricket", "football", "match", "tournament", "cup", "league", "cycling", "triathlon", "yoga day"],
-    "food": ["food", "culinary", "street food", "beer", "wine", "coffee", "tasting"],
-    "family": ["kids", "children", "family", "science", "zoo", "puppet"],
-    "markets": ["fair", "mela", "market", "bazaar", "flea", "expo", "haat"],
-    "outdoors": ["trek", "hike", "birding", "nature", "outdoor", "camp"],
-    "nightlife": ["night", "party", "club", "nightlife"],
-    "festival": ["festival"]
+  "category_priority": ["festivals", "religious", "music", "comedy", "theatre", "exhibition", "art", "heritage", "cultural", "food", "workshops", "education", "technology", "business", "sports", "adventure", "nightlife", "markets", "shopping", "family", "community", "outdoor"],
+  "festival_keywords": ["festival of lights", "deepavali", "diwali", "dasara", "dussehra", "navaratri", "navratri", "durga puja", "ganesh", "ganesha chaturthi", "vinayaka", "pongal", "sankranti", "onam", "holi", "eid", "ramadan", "christmas", "easter", "ugadi", "gudi padwa", "karaga", "utsav", "utsava", "rathotsava", "rath yatra", "car festival", "temple festival", "jatre", "jatra", "harvest", "kite festival", "boat race", "lohri", "baisakhi", "bihu", "chhath", "janmashtami", "shivaratri", "vesak", "songkran", "loy krathong", "chinese new year", "lunar new year", "thaipusam"],
+  "festival_categories": ["festivals", "religious"],
+  "provider_categories": {
+    "ticketmaster": {"music": "music", "sports": "sports", "arts & theatre": "theatre", "theatre": "theatre", "comedy": "comedy", "family": "family", "film": "art", "fine art": "art", "dance": "cultural", "festival": "festivals", "miscellaneous": "other", "fairs & festivals": "festivals", "food & drink": "food", "nightlife": "nightlife"},
+    "dataset": {"food": "food", "heritage": "heritage", "nature": "outdoor", "nightlife": "nightlife", "shopping": "markets", "museum": "exhibition", "festival": "festivals"},
+    "legacy": {"festival": "festivals", "music": "music", "culture": "cultural", "arts": "art", "sports": "sports", "food": "food", "family": "family", "markets": "markets", "outdoors": "outdoor", "nightlife": "nightlife", "other": "other"}
   },
-  "dataset_category_map": {"food": "food", "heritage": "culture", "nature": "outdoors", "nightlife": "nightlife", "shopping": "markets"},
+  "ticketmaster_classifications": {"music": "Music", "sports": "Sports", "theatre": "Arts & Theatre", "comedy": "Comedy", "family": "Family", "art": "Arts & Theatre", "cultural": "Arts & Theatre", "festivals": "Festival"},
+  "sources": {
+    "_comment": "Reliability 0..1 by kind of source. Domains are matched by suffix/substring; they describe kinds of sources, not events.",
+    "stored_curated": 0.8,
+    "stored_dataset": 0.55,
+    "ticketmaster": 0.9,
+    "google_events": 0.65,
+    "web_authoritative": 0.85,
+    "web_platform": 0.7,
+    "web_news": 0.6,
+    "web_aggregator": 0.4,
+    "web_unknown": 0.35,
+    "authoritative_patterns": [".gov", ".gov.", "gov.in", "nic.in", "tourism", "official", ".museum", ".edu", ".ac."],
+    "platform_domains": ["ticketmaster.", "eventbrite.", "bookmyshow.com", "insider.in", "district.in", "meetup.com", "skillboxes.com", "townscript.com", "ticketnew.com", "songkick.com", "bandsintown.com", "timeout.com", "allevents.in"],
+    "news_domains": ["thehindu.com", "timesofindia", "indianexpress.com", "hindustantimes.com", "deccanherald.com", "ndtv.com", "bbc.", "news"],
+    "aggregator_domains": ["allevents.in", "eventsfy", "whatsuplife", "happeningnext", "10times.com", "eventseye"],
+    "listicle_patterns": ["top \\d+", "\\d+ best", "best events", "things to do", "events in [a-z ]+ (this|next)", "upcoming events in", "what's on in", "whats on in", "events happening in", "list of", "guide to", "calendar"]
+  },
+  "web_queries": {
+    "max_queries": 3,
+    "results_per_query": 10,
+    "generic": ["events in {city} {when}", "things happening in {city} {when}"],
+    "festival": ["festivals in {city} {month_year}", "{city} festival {month_year} dates"],
+    "category": "{category} in {city} {when}",
+    "season": "{season} events in {city} {month_year}"
+  },
+  "freshness": {"fresh_min": 30, "recent_min": 360, "stale_after_min": 1440, "default_duration_min": 180},
+  "cache_ttl_s": {"ticketmaster": 1800, "google_events": 1800, "web": 3600, "stored": 300},
+  "geo": {"destination_min_radius_km": 15, "destination_radius_margin_km": 5, "near_me_radius_km": 10, "max_radius_km": 100},
+  "time_windows": {"tonight_from": "17:00", "evening_from": "17:00"},
+  "ranking": {
+    "weights": {"time": 0.2, "distance": 0.15, "relevance": 0.2, "confidence": 0.2, "freshness": 0.05, "vibe": 0.1, "popularity": 0.1},
+    "distance_scale_km": 8,
+    "low_confidence_below": 0.5,
+    "high_confidence_at": 0.7,
+    "footfall_scale": 150000
+  },
   "crowd_footfall_high": 100000,
-  "live": {
-    "enabled": true,
-    "cache_ttl_s": 21600,
-    "max_results": 12,
-    "query_templates": ["events in {city} {date_phrase}"],
-    "source_confidence": 0.7
-  },
-  "ranges": {
-    "day": 0,
-    "weekend": "sat-sun",
-    "week": 6
-  }
+  "tabs": [
+    {"id": "today", "label": "Happening today"},
+    {"id": "tonight", "label": "Tonight"},
+    {"id": "weekend", "label": "This weekend"},
+    {"id": "upcoming", "label": "Upcoming"},
+    {"id": "festivals", "label": "Festivals", "categories": ["festivals", "religious"]},
+    {"id": "cultural", "label": "Cultural", "categories": ["cultural", "heritage", "theatre"]},
+    {"id": "music", "label": "Music", "categories": ["music"]},
+    {"id": "food", "label": "Food", "categories": ["food", "markets"]},
+    {"id": "art", "label": "Art", "categories": ["art", "exhibition"]},
+    {"id": "family", "label": "Family", "categories": ["family"]},
+    {"id": "free", "label": "Free events", "free": true}
+  ],
+  "upcoming_days": 30
 }

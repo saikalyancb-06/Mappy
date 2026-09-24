@@ -28,6 +28,7 @@ Put your keys in `geoguide/backend/.env`. They stay on the server and are never 
 ```
 GROQ_API_KEY=gsk_...
 SERPAPI_KEY=...
+TICKETMASTER_API_KEY=...        # optional: structured event listings where Ticketmaster has coverage
 AUTH_SECRET=<any long random string>
 ```
 
@@ -64,7 +65,8 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
    * *Give me 3 places only, quiet and free* ("don't waste my time": low-confidence places are dropped)
 
    Tap a numbered chip to see its source. The 🐞 button shows the full retrieval trace in development.
-7. **Profile** sets interests, a daily spending limit with currency, usual transport, pace, walking and step-free access. These change ranking, budget fit and plans. Choosing Kannada or Hindi translates answers and keeps place names.
+7. **Feedback.** On any place, tap **How was this place?**: pick a rating, then any vibes (Peaceful, Scenic, Lively… or *Other*), then optionally what you liked or didn't, and a line of text. Plans also ask after you mark a stop *Done*. Places show **What visitors say** (labelled as opinions, and as sample data where synthetic). Your **Profile** shows the vibes you enjoy and what you avoid, and recommendations and events shift towards them.
+8. **Profile** sets interests, a daily spending limit with currency, usual transport, pace, walking and step-free access. These change ranking, budget fit and plans. Choosing Kannada or Hindi translates answers and keeps place names.
 
 ## City + date context engine
 
@@ -84,6 +86,14 @@ pick ┘   (coverage → geocoder) ├─ events & festivals: city_id = ? AND st
 * **Source order:** curated and organiser data → live event APIs (Ticketmaster, optional, where it has coverage) → web event listings (Google Events via SerpApi). Listings are kept only if their dates can be read and overlap the requested day or range. They are stored with their source and a *verified* timestamp. The LLM is never a source of events.
 * **Zero stays zero.** If nothing matches, the response is `events: []` with `event_status: "no_verified_events_found"`. The model receives `VERIFIED EVENTS: None` plus a hard rule not to infer or substitute. The validator rejects any event or festival name that isn't in the evidence, and the answer falls back to a deterministic one built from the evidence.
 * **Follow-ups keep the context.** Ask sends the selected date. "What's happening here this weekend?" resolves *here* from GPS and *this weekend* against the selected date.
+
+## Feedback, vibes and events
+
+See **[docs/feedback-and-events.md](docs/feedback-and-events.md)** for the data model, formulas, providers and example API requests and responses. In short:
+
+* **Feedback → signals.** Each rating, set of vibe chips, pair of liked/disliked chips and text becomes normalised rows. Place vibe profiles are shrunk towards the place's own tags until enough feedback exists. Traveller preferences are recency-weighted, with a cold start. Two ranking components are added: `vibe` (user-specific, including aversions like "too crowded") and `community` (the place-level rating). Both are neutral without data.
+* **Events.** Stored records, Ticketmaster and Google Events are queried first, with a validated web search as the long-tail fallback. Results are normalised, checked against the dates and the destination's boundary, linked to known venues, de-duplicated, scored for confidence and freshness (expired events are removed), and ranked by time, distance, relevance, confidence and vibe. Nothing comes from the RAG store or the LLM, and an empty result stays empty.
+* **Synthetic bootstrap feedback.** 800 records, clearly labelled, are loaded for development. Set `AUTO_SEED_FEEDBACK=false` and `FEEDBACK_INCLUDE_SYNTHETIC=false` to exclude them.
 
 ## How a question is answered
 
@@ -138,7 +148,11 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 | `POST /api/ask` | `{question, user_location?, active_destination?, selected_place_id?, date?, language?, debug?}` → grounded answer + structured context |
 | `GET /api/now` | Briefing, weather, daylight, advisories, events, suggestions |
 | `GET /api/context` | City + date context: `destination_id` or GPS, `date=YYYY-MM-DD` (default: the city's today) → city, season, weather (with `basis`), events, tips, about, culture, attractions, advisories, grounded briefing |
-| `GET /api/events` | What's happening in the city: `date` plus `when` (*this weekend*, *next week*, *Oct 22*, *in October*) or `end`; grouped by category, with sources checked and `event_status` |
+| `GET /api/events` | Verified events for the destination (or `near=me`): `date` plus `when` (*tonight*, *this weekend*, *next week*, *Oct 22*, *in October*, *during my trip*) or `end`; `q`, `category`, `free`, `festival`, `radius_km`; with sources checked, counts and `event_status` |
+| `GET /api/events/overview` | The next 30 days of verified events split into the tabs that have events (Today, Tonight, This weekend, Festivals, Music, Free…) |
+| `POST /api/feedback`, `GET /api/feedback/vocabulary` | Post-visit feedback (rating, vibes, liked/disliked, text) and its vocabulary |
+| `GET /api/places/{id}/community`, `GET /api/me/vibes` | What visitors say about a place; your learned vibe profile (labels only) |
+| `GET /api/feedback/analytics` | Development only: vibe/aspect distributions, volume, confidence, ranking changes caused by feedback |
 | `GET /api/nearby` | Ranked places; `origin=auto\|user\|destination`, `category`, `group`, `open_now`, `radius_km`, `text` (free-text constraints), `ranking_mode`, `travel_mode`, `within_budget` |
 | `GET /api/hotels` | Best stays; `sort=best\|cheapest\|nearest\|top_rated`, `check_in`, `nights`, `max_price`, `min_stars`, `within_budget` |
 | `GET /api/search` | `q`, `kind=place\|stay\|destination`: typo-tolerant search over stored places, hotels and destinations, then live maps |
@@ -157,7 +171,7 @@ cd geoguide/backend && python -m pytest -q
 cd geoguide/frontend && npm run lint && npm run build
 ```
 
-The backend suite (149 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
+The backend suite (190 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
 
 * GPS available, missing, stale, low-accuracy or invalid, and "explicit destination vs GPS"
 * A labelled intent set, radius and category hard filters, and ranking precision@3
@@ -171,6 +185,8 @@ The backend suite (149 tests) runs offline against a fictional destination ("Tes
 * The constraint engine, hidden gems, budget fit, hotels with live rates, plan wishes, re-planning from the current state, route detours, compare and search
 * City + date: date ranges, city resolution, multi-day overlap, city scoping, cancelled and associated festivals, live listings (dated / undated / duplicate), weather basis per date, the three judge states (today, festival date, empty date), and an LLM that invents a festival being rejected
 * Plan wishes: negation scope, amounts without a currency, quantities, one-of caps, sunset timing, explained gaps, liked places not forced into swipe order, and the swipe deck
+* Feedback and vibes: peaceful vs lively travellers, crowd- and cost-averse travellers, cold start, a single review, conflicting feedback, new places, new vibes, a user's dislike vs a place's global quality, and the synthetic bootstrap
+* Events: tonight, weekend, destination vs physical location, near-me distance, venue linking, multi-provider de-duplication, stale and expired listings, confidence by source, free/festival/category filters, provider failure, web fallback, vibe-personalised ranking, and Ticketmaster mapping
 * The full API
 
 ## Known limits

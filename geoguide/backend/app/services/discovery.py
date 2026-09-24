@@ -47,6 +47,7 @@ class DiscoveryRequest:
     avoid_tags: set[str] = field(default_factory=set)
     within_budget: bool = False
     constraints: Any = None  # app.query.constraints.Constraints
+    use_feedback: bool = True
     include_tags: set[str] = field(default_factory=set)  # places with these tags match too (e.g. a "sunset spot" tagged sunset)
     travel_origin: tuple[float, float] | None = None
 
@@ -220,6 +221,7 @@ def discover(request: DiscoveryRequest, trace: Trace | None = None, web: SerpApi
         within_budget=request.within_budget,
         constraints=request.constraints,
         travel_origin=request.travel_origin,
+        use_feedback=request.use_feedback,
     )
     result = rank(merged, rank_request)
     ranked = result.ranked
