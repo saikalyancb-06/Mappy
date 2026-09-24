@@ -11,6 +11,7 @@ import re
 
 from app.core.rules import load_rules, taxonomy
 from app.core.text import normalize
+from app.query.constraints import parse_constraints
 from app.query.models import IntentType, QueryIntent, TemporalConstraint
 
 _ENTITY_PATTERNS = [
@@ -61,6 +62,7 @@ def _vocabulary_words() -> set[str]:
         for phrase in phrases:
             words.update(normalize(phrase).split())
     words.update(normalize(" ".join(rules["determiners"] + rules["stop_words"] + rules["self_references"])).split())
+    words.update({"minute", "minutes", "min", "mins", "hour", "hours", "hr", "hrs", "km", "kms", "m", "metres", "meters", "rs", "rupees", "inr", "pm", "am", "only", "places", "options"})
     words.update({"night", "morning", "evening", "afternoon", "week", "weekend", "day", "days", "hour", "hours", "moment"})
     words.update({"place", "places", "thing", "things", "spot", "spots", "area", "areas", "somewhere", "something", "anything", "one", "ones", "some", "what", "where", "which", "i", "we", "you", "can", "should", "do", "go", "see", "get"})
     return words
@@ -71,7 +73,7 @@ def _is_meaningful_mention(phrase: str) -> bool:
     if not words:
         return False
     vocabulary = _vocabulary_words()
-    return any(word not in vocabulary for word in words)
+    return any(word not in vocabulary and not word.isdigit() for word in words)
 
 
 def _cue_words() -> set[str]:
@@ -234,6 +236,22 @@ def _place_mentions(text: str) -> tuple[str | None, str | None, bool]:
     return found[0][1], found[0][2], near_me
 
 
+_COMPARE = re.compile(r"\bcompare\s+(?P<list>.+)|(?P<a>[\w' .&-]+?)\s+(?:vs\.?|versus)\s+(?P<b>[\w' .&-]+)", re.IGNORECASE)
+
+
+def _compare_mentions(text: str) -> list[str]:
+    match = _COMPARE.search(text)
+    if not match:
+        return []
+    if match.group("list"):
+        body = re.sub(r"\b(?:for me|please|places|these|the)\b", " ", match.group("list"), flags=re.IGNORECASE)
+        parts = [p.strip(" ?.!") for p in re.split(r",|\band\b|\bwith\b|\bvs\.?\b|\bversus\b|&", body, flags=re.IGNORECASE)]
+    else:
+        parts = [match.group("a").strip(" ?.!"), match.group("b").strip(" ?.!")]
+    parts = [p for p in parts if p and _is_meaningful_mention(p)]
+    return parts if len(parts) >= 2 else []
+
+
 def parse_query(text: str, *, has_selected_entity: bool = False) -> QueryIntent:
     rules = load_rules("intents")
     cues = rules["cues"]
@@ -320,6 +338,24 @@ def parse_query(text: str, *, has_selected_entity: bool = False) -> QueryIntent:
         intent = IntentType.GENERAL_TRAVEL_QUESTION
         confidence = 0.4
 
+    constraints = parse_constraints(raw)
+    compare = _compare_mentions(raw)
+    if compare:
+        intent, confidence = IntentType.COMPARE, 0.85
+    elif constraints.route_destination:
+        intent, confidence = IntentType.ROUTE_SUGGESTIONS, 0.85
+        category = constraints.include_categories[0] if constraints.include_categories else None  # not a word from the endpoints' names
+    elif (constraints.window_start and constraints.window_end) and intent not in {IntentType.WEATHER, IntentType.SAFETY}:
+        intent = IntentType.ITINERARY
+    elif constraints.available_minutes and intent in {IntentType.ACTIVITY_DISCOVERY, IntentType.GENERAL_TRAVEL_QUESTION, IntentType.DESTINATION_KNOWLEDGE} and not category:
+        intent = IntentType.ITINERARY
+    elif intent in {IntentType.GENERAL_TRAVEL_QUESTION, IntentType.DESTINATION_KNOWLEDGE, IntentType.WEB_RESEARCH} and not constraints.is_empty and (constraints.max_travel_min or constraints.max_cost or constraints.max_price_level or constraints.min_rating or constraints.ranking_mode or constraints.open_now or constraints.limit):
+        intent = IntentType.ACTIVITY_DISCOVERY
+    if constraints.open_now and temporal is None:
+        temporal = TemporalConstraint("now")
+    for preference in constraints.preferences:
+        if preference not in preferences:
+            preferences.append(preference)
     result = QueryIntent(
         intent=intent,
         raw_query=raw,
@@ -335,6 +371,8 @@ def parse_query(text: str, *, has_selected_entity: bool = False) -> QueryIntent:
         quality_focus=bool(has["quality"]),
         confidence=confidence,
         signals=signals,
+        constraints=constraints,
+        compare_mentions=compare,
     )
     apply_requirements(result, live_cue=bool(has["live"]), weather_cue=bool(has["weather"]), time_sensitive=time_sensitive, knowledge_cue=bool(has["knowledge"]))
     return result

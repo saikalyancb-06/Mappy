@@ -17,7 +17,7 @@ from app.geo.geo_context import GeoContext, build_geo_context, destination_by_id
 from app.geo.geocoding import destination_to_place, resolve_place
 from app.geo.spatial import get_pois
 from app.entities.resolver import resolve_entity
-from app.knowledge.context import active_advisories, events_for, weather_notices, web_events
+from app.knowledge.context import SERIOUS, active_advisories, events_for, weather_notices, web_events
 from app.llm.evidence import EvidenceBuilder
 from app.llm.generator import generate
 from app.llm.prompts import AnswerContext
@@ -29,7 +29,9 @@ from app.query.parser import parse_query
 from app.retrieval.knowledge import retrieve
 from app.search.normalizer import web_evidence
 from app.search.serpapi import SearchProviderError, client as serp_client
+from app.ranking.ranker import RankRequest, rank
 from app.services.discovery import DiscoveryRequest, discover
+from app.services.route_suggestions import RouteRequest, route_suggestions
 from app.weather.open_meteo import get_weather, local_now
 
 ATTRACTION_KINDS = set(taxonomy()["attraction_kinds"])
@@ -98,7 +100,7 @@ class QueryService:
             intent.spatial_relation = intent.spatial_relation or "in_place"
         trace.set("intent", intent.as_dict())
 
-        place_for_geo = None if intent.intent == IntentType.PLACE_LOOKUP else intent.place_mention
+        place_for_geo = None if intent.intent in {IntentType.PLACE_LOOKUP, IntentType.ROUTE_SUGGESTIONS, IntentType.COMPARE} else intent.place_mention
         geo = build_geo_context(user_location=request.user_location, active_destination=request.active_destination, place_mention=place_for_geo, spatial_relation=intent.spatial_relation if intent.intent != IntentType.PLACE_LOOKUP else None, radius_km=intent.radius_km)
         if intent.intent == IntentType.NEARBY_SEARCH and geo.reference and geo.reference.semantic == "near_me" and not intent.radius_km:
             geo.reference.radius_km = float(load_rules("intents")["default_radius_km"]["NEARBY_SEARCH"])
@@ -117,6 +119,8 @@ class QueryService:
             IntentType.ITINERARY: self._itinerary,
             IntentType.LIVE_INFORMATION: self._events,
             IntentType.WEB_RESEARCH: self._web,
+            IntentType.ROUTE_SUGGESTIONS: self._route,
+            IntentType.COMPARE: self._compare,
         }.get(intent.intent, self._knowledge)
         trace.set("route", handler.__name__.strip("_"))
         handler(state)
@@ -197,6 +201,7 @@ class QueryService:
             require_open=bool(intent.live_required),
             weather_signals=(weather or {}).get("signals") or [],
             user_point=state.geo.user_point(),
+            constraints=intent.constraints,
         ), trace=state.trace)
         state.errors.extend(result.provider_errors)
         state.candidates = result.candidates
@@ -237,6 +242,7 @@ class QueryService:
             require_open=bool(intent.live_required and intent.temporal and intent.temporal.label == "now"),
             weather_signals=(weather or {}).get("signals") or [],
             user_point=state.geo.user_point(),
+            constraints=intent.constraints,
         ), trace=state.trace)
         state.errors.extend(result.provider_errors)
         state.candidates = result.candidates
@@ -254,7 +260,7 @@ class QueryService:
                 if hit.scores.get("bm25", 0) > 0 or hit.scores.get("vector", 0) > 0.4:
                     state.evidence.add_knowledge(hit)
             day = local_time.date()
-            advisories = [a for a in active_advisories(reference.destination_id, day) if a["severity"] in {"high", "moderate"}] + weather_notices(weather)
+            advisories = [a for a in active_advisories(reference.destination_id, day) if a["severity"] in SERIOUS] + weather_notices(weather)
             state.safety = advisories
             for advisory in advisories[:3]:
                 state.evidence.add_advisory(advisory)
@@ -331,6 +337,71 @@ class QueryService:
             self._web_search(state, f"{entity.name} {entity.address or intent.locality_hint or ''} opening hours".strip(), limit=3)
         state.extra["lead"] = None
 
+    def _route(self, state: "_State") -> None:
+        intent, geo = state.intent, state.geo
+        c = intent.constraints
+        near = geo.user_point() or ((geo.active_destination.lat, geo.active_destination.lon) if geo.active_destination else None)
+        destination, errors = resolve_place(c.route_destination, near=near)
+        state.errors.extend(errors)
+        if c.route_origin:
+            origin_place, origin_errors = resolve_place(c.route_origin, near=near)
+            state.errors.extend(origin_errors)
+            origin = (origin_place.lat, origin_place.lon, origin_place.name) if origin_place else None
+        elif geo.user_location:
+            origin = (geo.user_location.lat, geo.user_location.lon, "your location")
+        else:
+            origin = None
+        if destination is None or origin is None:
+            missing = f"“{c.route_destination}”" if destination is None else (f"“{c.route_origin}”" if c.route_origin else "your starting point (turn on location)")
+            state.extra["empty_message"] = f"I couldn't locate {missing}, so I can't work out what's on the way."
+            state.needs = "route_endpoints"
+            return
+        result = route_suggestions(RouteRequest(origin=(origin[0], origin[1]), origin_label=origin[2], destination=(destination.lat, destination.lon), destination_label=destination.name, max_detour_min=c.max_travel_min, user=state.request.profile, constraints=c, category=intent.category), trace=state.trace)
+        state.errors.extend(result["provider_errors"])
+        state.candidates = result["items"]
+        state.route = {"origin": origin[2], "destination": destination.name, "direct_km": result["direct_km"], "direct_min": result["direct_min"], "mode": result["mode"], "max_detour_min": result["max_detour_min"]}
+        for candidate in result["items"][:6]:
+            evidence = state.evidence.add_candidate(candidate, origin[2])
+            evidence.content += f"; adds about {candidate.detour_min} min to the {result['direct_min']} min trip by {result['mode']} (estimate)"
+        if not result["items"]:
+            state.extra["empty_message"] = f"I didn't find verified places within a {result['max_detour_min']}-minute detour between {origin[2]} and {destination.name}."
+        state.extra["lead"] = f"On the way from {origin[2]} to {destination.name} (~{result['direct_min']} min by {result['mode']}, estimate):"
+
+    def _compare(self, state: "_State") -> None:
+        geo = state.geo
+        reference = geo.user_point() or ((geo.active_destination.lat, geo.active_destination.lon) if geo.active_destination else None)
+        rows, unresolved = [], []
+        for mention in state.intent.compare_mentions[:5]:
+            resolution = resolve_entity(mention, reference=reference, trace=state.trace)
+            if resolution.status == "resolved" and resolution.entity:
+                rows.append(resolution.entity)
+            else:
+                unresolved.append(mention)
+        if not rows:
+            state.extra["empty_message"] = "I couldn't identify the places to compare. Try their full names."
+            return
+        ranked = rank(rows, RankRequest(profile_name="discovery", reference=reference, reference_label="you" if geo.user_point() else None, user=state.request.profile, local_time=local_now(_reference_timezone(geo)), time_sensitive=True, user_point=geo.user_point()))
+        state.candidates = ranked.ranked
+        for candidate in state.candidates:
+            candidate.distance_km = distance_from_user(geo, candidate.lat, candidate.lon)
+            state.evidence.add_candidate(candidate, "you" if candidate.distance_km is not None else None)
+        state.comparison = {
+            "columns": [c.name for c in state.candidates],
+            "rows": [
+                {"factor": "Distance", "values": [c.distance_km for c in state.candidates], "format": "km"},
+                {"factor": "Rating", "values": [(f"{c.guest_score:.1f}/10" if c.guest_score is not None else f"{c.rating:.1f}/5") if (c.guest_score is not None or c.rating is not None) else None for c in state.candidates]},
+                {"factor": "Cost", "values": [c.cost_for_user.get("display") for c in state.candidates]},
+                {"factor": "Open now", "values": [{"open": "Yes", "closed": "No"}.get(c.open_status) for c in state.candidates]},
+                {"factor": "Quietness", "values": [c.bars.get("quietness") for c in state.candidates], "format": "bar"},
+                {"factor": "Visit", "values": [f"{c.visit_duration_min} min" if c.visit_duration_min else None for c in state.candidates]},
+                {"factor": "Confidence", "values": [c.confidence_detail.get("label") for c in state.candidates]},
+            ],
+            "unresolved": unresolved,
+        }
+        state.extra["lead"] = "Here's how they compare (no single one is best for everyone):"
+        if unresolved:
+            state.extra.setdefault("closing_notes", []).append("I couldn't identify: " + ", ".join(unresolved) + ".")
+
     def _knowledge(self, state: "_State") -> None:
         geo, intent = state.geo, state.intent
         destination_id = geo.reference.destination_id if geo.reference else None
@@ -363,7 +434,7 @@ class QueryService:
         duration = None
         if intent.temporal and intent.temporal.duration_hours:
             duration = int(intent.temporal.duration_hours * 60)
-        plan, weather, errors = build_plan(geo=state.geo, profile=state.request.profile, duration_min=duration, part_of_day=intent.temporal.part_of_day if intent.temporal else None, day_offset=_day_offset(intent), preset="balanced", trace=state.trace)
+        plan, weather, errors = build_plan(geo=state.geo, profile=state.request.profile, duration_min=duration, part_of_day=intent.temporal.part_of_day if intent.temporal else None, day_offset=_day_offset(intent), preset="balanced", wishes=intent.raw_query, constraints=intent.constraints, trace=state.trace)
         state.errors.extend(errors)
         state.plan = plan
         state.weather = weather
@@ -464,6 +535,9 @@ class QueryService:
             "safety": state.safety,
             "events": state.events,
             "plan": {k: v for k, v in state.plan.items() if not k.startswith("_")} if state.plan else None,
+            "route": state.route,
+            "comparison": state.comparison,
+            "understood": intent_constraints_understood(state.intent),
             "sources": [item.as_dict() for item in state.evidence.items],
             "confidence": round(confidence, 2),
             "notices": _notices(state),
@@ -474,8 +548,15 @@ class QueryService:
         return response
 
 
+def intent_constraints_understood(intent: QueryIntent) -> list[str]:
+    return list(intent.constraints.understood) if intent.constraints is not None else []
+
+
 def _notices(state: "_State") -> list[str]:
     notices = list(state.geo.warnings)
+    for candidate in state.candidates[:6]:
+        for conflict in candidate.conflicts:
+            notices.append(f"Information about {candidate.name} is inconsistent ({conflict['detail']}). Verify before travelling.")
     codes = {error.get("code") for error in state.errors}
     if "web_search_unavailable" in codes:
         notices.append("Live web search is not configured; results come from stored data.")
@@ -504,6 +585,8 @@ class _State:
     events: list[dict[str, Any]] = field(default_factory=list)
     web: list[dict[str, Any]] = field(default_factory=list)
     plan: dict[str, Any] | None = None
+    route: dict[str, Any] | None = None
+    comparison: dict[str, Any] | None = None
     errors: list[dict[str, str]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
     needs: str | None = None

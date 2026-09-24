@@ -10,12 +10,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from app.core.rules import load_rules
 from app.geo import opening_hours
 from app.geo.distance import haversine_km
 from app.models import Candidate
+from app.services.cost import money_text, sum_money, to_decimal
 
 
 @dataclass
@@ -32,6 +34,10 @@ class PlanRequest:
     excluded_ids: list[str] = field(default_factory=list)
     weather: dict[str, Any] | None = None
     previous: dict[str, Any] | None = None
+    budget_cap: Decimal | None = None  # hard: the plan's known costs must fit
+    travel_mode: str | None = None  # traveller's own transport for longer legs
+    end_label: str | None = None
+    understood: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -49,14 +55,19 @@ def _leg(a: tuple[float, float], b: tuple[float, float], request: PlanRequest) -
     straight = haversine_km(a[0], a[1], b[0], b[1])
     distance = straight * config["detour_factor"]
     walk_limit = config["walk_max_km"].get(request.walking, 1.5) * preset["walk_multiplier"]
-    if distance <= walk_limit:
+    own = {"auto": "auto_rickshaw"}.get(request.travel_mode or "", request.travel_mode)
+    if request.travel_mode == "walk":
         mode = "walk"
+    elif distance <= walk_limit and own not in {"car", "motorbike"}:
+        mode = "walk"
+    elif own in config["modes"]:
+        mode = own
     elif preset.get("bicycle_max_km") and distance <= preset["bicycle_max_km"]:
         mode = "bicycle"
     else:
         mode = "auto_rickshaw"
     spec = config["modes"][mode]
-    minutes = max(2, int(round(distance / spec["speed_kmh"] * 60)))
+    minutes = max(2, int(round(distance / spec["speed_kmh"] * 60 + spec.get("wait_min", 0))))
     costs = (config.get("transport_costs") or {}).get(request.currency or "")
     cost = None
     if costs and mode in costs:
@@ -115,13 +126,17 @@ def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | 
         depart = arrive + timedelta(minutes=visit)
         if depart > end_limit:
             return None
+        if request.budget_cap is not None:
+            known = Decimal(str(totals["cost"])) + (to_decimal(leg.cost) or Decimal(0)) + (to_decimal(candidate.entry_cost) or Decimal(0))
+            if known > request.budget_cap:
+                return None
         factor, weather_note = _weather_factor(candidate, arrive, request)
         value = (candidate.score or 0.3) * factor
-        entry_cost = candidate.entry_fee
+        entry_cost = float(to_decimal(candidate.entry_cost)) if candidate.entry_cost is not None else candidate.entry_fee
         totals["travel_min"] += leg.minutes
         totals["visit_min"] += visit
         totals["wait_min"] += wait
-        totals["co2_g"] += leg.co2_g
+        totals["co2_g"] += leg.co2_g + (candidate.carbon_kg or 0.0) * 1000
         totals["walking_km"] += leg.distance_km if leg.mode == "walk" else 0.0
         if leg.cost is None or entry_cost is None:
             totals["cost_unknown_items"] += (leg.cost is None) + (entry_cost is None)
@@ -175,7 +190,8 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
         order.insert(index, candidate)
         remaining.remove(candidate)
 
-    for candidate in remaining[:10]:
+    reported = {item["id"] for item in unscheduled}
+    for candidate in [c for c in remaining if c.id not in reported][:10]:
         unscheduled.append({"id": candidate.id, "name": candidate.name, "reason": "did not fit the time window, opening hours or preferences as well as the chosen stops"})
 
     simulation = _simulate(order, request) if order else {"stops": [], "totals": {"travel_min": 0, "visit_min": 0, "wait_min": 0, "cost": 0.0, "cost_unknown_items": 0, "co2_g": 0.0, "walking_km": 0.0, "value": 0.0, "end": request.start_time}}
@@ -201,6 +217,10 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "wait_min": stop["wait_min"],
             "open_check": stop["open_check"],
             "entry_fee": candidate.entry_fee,
+            "entry_cost": candidate.entry_cost,
+            "carbon_kg": candidate.carbon_kg,
+            "confidence": candidate.confidence_detail.get("label"),
+            "conflicts": candidate.conflicts,
             "entry_fee_foreign": candidate.entry_fee_foreign,
             "fee_currency": candidate.fee_currency or request.currency,
             "fee_notes": candidate.fee_notes,
@@ -212,6 +232,7 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "leg": {"from": request.start_label if position == 1 else simulation["stops"][position - 2]["candidate"].name, "mode": leg.mode, "distance_km": leg.distance_km, "minutes": leg.minutes, "cost": leg.cost, "co2_g": leg.co2_g, "estimate": True},
         })
     totals = simulation["totals"]
+    exact, exact_currency, exact_complete = sum_money([(s["candidate"].entry_cost, s["candidate"].fee_currency or request.currency) for s in simulation["stops"]] + [(s["leg"].cost, request.currency) for s in simulation["stops"]])
     used = int((totals["end"] - request.start_time).total_seconds() // 60) if stops_out else 0
     plan = {
         "id": uuid.uuid4().hex,
@@ -228,8 +249,12 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "visit_min": totals["visit_min"],
             "wait_min": totals["wait_min"],
             "cost": round(totals["cost"], 0),
-            "cost_currency": request.currency,
-            "cost_complete": totals["cost_unknown_items"] == 0,
+            "cost_exact": str(exact),
+            "cost_display": money_text(exact, exact_currency or request.currency),
+            "cost_currency": exact_currency or request.currency,
+            "cost_complete": totals["cost_unknown_items"] == 0 and exact_complete,
+            "budget_cap": str(request.budget_cap) if request.budget_cap is not None else None,
+            "within_budget": (exact <= request.budget_cap) if request.budget_cap is not None else None,
             "co2_g": round(totals["co2_g"], 0),
             "walking_km": round(totals["walking_km"], 2),
         },
@@ -237,6 +262,8 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
         "unscheduled": unscheduled,
         "weights": (config["presets"].get(request.preset) or config["presets"]["balanced"]),
         "estimates_note": "Travel times, fares and CO2 are estimates from straight-line distance; entry fees come from stored data.",
+        "understood": request.understood,
+        "travel_mode": request.travel_mode,
     }
     plan["explanation"] = explain_changes(request.previous, plan) if request.previous else [f"Built a {request.preset.replace('_', ' ')} plan with {len(stops_out)} stops in {used} of {request.duration_min} minutes."]
     return plan
@@ -245,7 +272,8 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
 def explain_changes(previous: dict[str, Any], plan: dict[str, Any]) -> list[str]:
     before, after = previous.get("totals") or {}, plan["totals"]
     currency = after.get("cost_currency") or ""
-    lines = [f"Re-planned for {plan['preset'].replace('_', ' ')}."]
+    same = previous.get("preset") == plan["preset"]
+    lines = ["Re-planned with the same priorities." if same else f"Re-planned for {plan['preset'].replace('_', ' ')}."]
     for key, label, unit in (("cost", "Estimated cost", f" {currency}".rstrip()), ("co2_g", "Estimated CO₂", " g"), ("walking_km", "Walking", " km"), ("travel_min", "Travel time", " min")):
         if key in before and before[key] != after[key]:
             direction = "down" if after[key] < before[key] else "up"

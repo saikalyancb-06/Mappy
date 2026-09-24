@@ -77,7 +77,9 @@ export const getPrefetchStatus = (jobId) => request(`/api/destinations/prefetch/
 
 // ---- screens ----
 export const getNow = (context, language = 'en') => request(`/api/now${contextParams(context, { language })}`)
-export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm })}`)
+export const getNearby = (context, { origin = 'auto', category, group, openNow, radiusKm, text, rankingMode, travelMode, withinBudget } = {}) => request(`/api/nearby${contextParams(context, { origin, category, group, open_now: openNow ? 'true' : null, radius_km: radiusKm, text, ranking_mode: rankingMode, travel_mode: travelMode, within_budget: withinBudget ? 'true' : null })}`)
+export const getHotels = (context, { origin = 'auto', sort = 'best', checkIn, nights, maxPrice, minStars, withinBudget } = {}) => request(`/api/hotels${contextParams(context, { origin, sort, check_in: checkIn, nights, max_price: maxPrice, min_stars: minStars, within_budget: withinBudget ? 'true' : null })}`)
+export const searchPlaces = (context, q, kind = null) => request(`/api/search${contextParams(context, { q, kind })}`)
 export const getPlace = (id, context) => request(`/api/places/${encodeURIComponent(id)}${contextParams({ userLocation: context?.userLocation })}`)
 
 export const askGeoGuide = ({ question, context, selectedPlaceId, language, debug }) => request('/api/ask', {
@@ -92,7 +94,7 @@ export const askGeoGuide = ({ question, context, selectedPlaceId, language, debu
   }),
 })
 
-export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedIds, previous }) => request('/api/plan', {
+export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedIds, previous, wishes, replan, profile }) => request('/api/plan', {
   method: 'POST',
   body: JSON.stringify({
     user_location: context.userLocation || null,
@@ -103,5 +105,8 @@ export const buildPlan = ({ context, duration, preset, dayOffset, start, lockedI
     start,
     locked_ids: lockedIds,
     previous,
+    wishes: wishes || null,
+    replan: replan || null,
+    profile: profile || null,
   }),
 })

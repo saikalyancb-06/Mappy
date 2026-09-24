@@ -5,7 +5,7 @@ from fastapi import APIRouter, Header, HTTPException
 from app.api.common import geo_for
 from app.core.logging import Trace
 from app.core.rules import load_rules
-from app.services.plan_service import build_plan
+from app.services.plan_service import ReplanState, build_plan
 from app.services.profile import resolve_profile, user_from_authorization
 
 router = APIRouter(prefix="/api")
@@ -35,6 +35,20 @@ def plan(payload: dict | None, authorization: str | None = Header(default=None))
     user = user_from_authorization(authorization)
     trace = Trace("plan")
     day_offset = int(safe.get("day_offset") or 0)
+    wishes = str(safe.get("wishes") or "").strip()[:500] or None
+    replan = None
+    if isinstance(safe.get("replan"), dict):
+        state = safe["replan"]
+        if not isinstance(state.get("previous"), dict) or not isinstance(state["previous"].get("stops"), list):
+            raise HTTPException(status_code=422, detail="replan.previous must be the plan being re-optimised.")
+        replan = ReplanState(
+            previous=state["previous"],
+            completed_ids=[str(i) for i in state.get("completed_ids") or []],
+            skipped_ids=[str(i) for i in state.get("skipped_ids") or []],
+            current_stop_id=str(state["current_stop_id"]) if state.get("current_stop_id") else None,
+            extra_minutes=max(0, min(int(state.get("extra_minutes") or 0), 240)),
+            now=str(state["now"]) if state.get("now") else None,
+        )
     plan_data, weather, errors = build_plan(
         geo=geo,
         profile=profile,
@@ -47,6 +61,8 @@ def plan(payload: dict | None, authorization: str | None = Header(default=None))
         excluded_ids=[str(i) for i in safe.get("excluded_ids") or []],
         previous=safe.get("previous") if isinstance(safe.get("previous"), dict) else None,
         user_id=user.id if user else None,
+        wishes=wishes if not replan else (replan.previous.get("wishes") or None),
+        replan=replan,
         trace=trace,
     )
     trace.emit()

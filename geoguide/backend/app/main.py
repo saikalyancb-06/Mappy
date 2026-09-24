@@ -6,8 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import ask, auth, destinations, places, plan, system
-from app.config import APP_ENV, APP_HOST, APP_PORT, AUTO_SEED_PACKS, CORS_ORIGINS
+from app.config import APP_ENV, APP_HOST, APP_PORT, AUTO_IMPORT_PS13, AUTO_SEED_PACKS, CORS_ORIGINS
 from app.core.logging import configure_logging
+from app.db.import_ps13 import import_if_needed
 from app.db.seed import seed_if_empty
 from app.db.session import init_db
 from app.retrieval.indexer import reindex_in_background
@@ -20,6 +21,8 @@ async def lifespan(_: FastAPI):
     init_db()
     if AUTO_SEED_PACKS:
         seed_if_empty()
+    if AUTO_IMPORT_PS13:
+        import_if_needed()  # after packs, so dataset cities attach to curated destinations
     reindex_in_background()  # embeds knowledge when the embedding model is available
     yield
 

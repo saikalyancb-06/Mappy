@@ -1,10 +1,51 @@
 {
   "_comment": "Ranking, dedup and entity-resolution weights. Tuned against tests/eval; change here, not in code.",
   "profiles": {
-    "nearby":     {"relevance": 0.30, "geographic": 0.30, "quality": 0.15, "open": 0.10, "preference": 0.10, "weather": 0.00, "source_confidence": 0.05},
-    "discovery":  {"relevance": 0.30, "geographic": 0.15, "quality": 0.15, "open": 0.10, "preference": 0.20, "weather": 0.05, "source_confidence": 0.05},
-    "itinerary":  {"relevance": 0.25, "geographic": 0.10, "quality": 0.15, "open": 0.15, "preference": 0.25, "weather": 0.05, "source_confidence": 0.05},
-    "lookup":     {"relevance": 0.60, "geographic": 0.20, "quality": 0.05, "open": 0.00, "preference": 0.00, "weather": 0.00, "source_confidence": 0.15}
+    "nearby": {
+      "relevance": 0.3,
+      "geographic": 0.3,
+      "quality": 0.15,
+      "open": 0.1,
+      "preference": 0.1,
+      "weather": 0.0,
+      "source_confidence": 0.05
+    },
+    "discovery": {
+      "relevance": 0.3,
+      "geographic": 0.15,
+      "quality": 0.15,
+      "open": 0.1,
+      "preference": 0.2,
+      "weather": 0.05,
+      "source_confidence": 0.05
+    },
+    "itinerary": {
+      "relevance": 0.25,
+      "geographic": 0.1,
+      "quality": 0.15,
+      "open": 0.15,
+      "preference": 0.25,
+      "weather": 0.05,
+      "source_confidence": 0.05
+    },
+    "lookup": {
+      "relevance": 0.6,
+      "geographic": 0.2,
+      "quality": 0.05,
+      "open": 0.0,
+      "preference": 0.0,
+      "weather": 0.0,
+      "source_confidence": 0.15
+    },
+    "stays": {
+      "relevance": 0.1,
+      "geographic": 0.25,
+      "quality": 0.35,
+      "open": 0.0,
+      "preference": 0.25,
+      "weather": 0.0,
+      "source_confidence": 0.05
+    }
   },
   "intent_profile": {
     "NEARBY_SEARCH": "nearby",
@@ -12,33 +53,216 @@
     "RECOMMENDATION": "discovery",
     "ITINERARY": "itinerary",
     "PLACE_LOOKUP": "lookup",
-    "DEFAULT": "discovery"
+    "DEFAULT": "discovery",
+    "HOTELS": "stays"
   },
-  "quality": {"prior_rating": 4.0, "prior_votes": 50, "unrated_score": 0.5, "tag_bonus": {"iconic": 0.25, "hidden_gem": 0.1}},
-  "relevance": {"exact_category": 1.0, "same_group": 0.7, "no_category_requested": 0.6, "preference_tag_weight": 0.4, "semantic_weight": 0.3},
-  "weather": {"heat_apparent_c": 35, "rain_probability": 60, "indoor_bonus": 1.0, "exposed_penalty": 0.0, "neutral": 0.5},
+  "quality": {
+    "prior_rating": 4.0,
+    "prior_votes": 50,
+    "unrated_score": 0.5,
+    "tag_bonus": {
+      "iconic": 0.25,
+      "hidden_gem": 0.1
+    }
+  },
+  "relevance": {
+    "exact_category": 1.0,
+    "same_group": 0.7,
+    "no_category_requested": 0.6,
+    "preference_tag_weight": 0.4,
+    "semantic_weight": 0.3
+  },
+  "weather": {
+    "heat_apparent_c": 35,
+    "rain_probability": 60,
+    "indoor_bonus": 1.0,
+    "exposed_penalty": 0.0,
+    "neutral": 0.5
+  },
   "min_results_before_web": 5,
   "max_results": 12,
-  "dedup": {"name_similarity": 0.85, "max_distance_km": 0.25, "same_contact_distance_km": 0.5},
-  "source_confidence": {"curated": 0.95, "database": 0.9, "osm": 0.75, "serpapi_maps": 0.7, "serpapi_web": 0.5},
+  "dedup": {
+    "name_similarity": 0.85,
+    "max_distance_km": 0.25,
+    "same_contact_distance_km": 0.5
+  },
+  "source_confidence": {
+    "curated": 0.95,
+    "database": 0.9,
+    "osm": 0.75,
+    "serpapi_maps": 0.7,
+    "serpapi_web": 0.5,
+    "dataset": 0.6,
+    "serpapi_hotels": 0.75
+  },
   "source_priority": {
-    "default": ["curated", "database", "serpapi_maps", "osm"],
-    "coordinates": ["curated", "database", "osm", "serpapi_maps"],
-    "rating": ["serpapi_maps", "curated", "database", "osm"],
-    "review_count": ["serpapi_maps", "curated", "database", "osm"],
-    "open_status": ["serpapi_maps", "curated", "database", "osm"],
-    "opening_hours_text": ["curated", "database", "serpapi_maps", "osm"],
-    "phone": ["serpapi_maps", "curated", "database", "osm"],
-    "website": ["curated", "serpapi_maps", "database", "osm"]
+    "default": [
+      "curated",
+      "database",
+      "serpapi_hotels",
+      "serpapi_maps",
+      "dataset",
+      "osm"
+    ],
+    "coordinates": [
+      "curated",
+      "database",
+      "osm",
+      "serpapi_maps",
+      "serpapi_hotels",
+      "dataset"
+    ],
+    "rating": [
+      "serpapi_hotels",
+      "serpapi_maps",
+      "curated",
+      "database",
+      "dataset",
+      "osm"
+    ],
+    "review_count": [
+      "serpapi_hotels",
+      "serpapi_maps",
+      "curated",
+      "database",
+      "dataset",
+      "osm"
+    ],
+    "open_status": [
+      "serpapi_hotels",
+      "serpapi_maps",
+      "curated",
+      "database",
+      "dataset",
+      "osm"
+    ],
+    "opening_hours_text": [
+      "curated",
+      "database",
+      "serpapi_hotels",
+      "serpapi_maps",
+      "dataset",
+      "osm"
+    ],
+    "phone": [
+      "serpapi_hotels",
+      "serpapi_maps",
+      "curated",
+      "database",
+      "dataset",
+      "osm"
+    ],
+    "website": [
+      "curated",
+      "serpapi_hotels",
+      "serpapi_maps",
+      "database",
+      "dataset",
+      "osm"
+    ],
+    "price_per_night": [
+      "serpapi_hotels",
+      "serpapi_maps",
+      "curated",
+      "database",
+      "dataset"
+    ]
   },
   "entity_resolution": {
-    "weights": {"name": 0.45, "locality": 0.20, "category": 0.10, "distance": 0.15, "source_agreement": 0.10},
+    "weights": {
+      "name": 0.45,
+      "locality": 0.2,
+      "category": 0.1,
+      "distance": 0.15,
+      "source_agreement": 0.1
+    },
     "branch_penalty_per_token": 0.07,
     "branch_penalty_max": 0.21,
     "distance_scale_km": 5.0,
     "resolve_threshold": 0.62,
     "ambiguity_margin": 0.08,
-    "min_candidate_score": 0.40,
-    "category_compatibility": {"hotel": ["hotel", "restaurant", "cafe"], "restaurant": ["restaurant", "cafe", "bakery"], "cafe": ["cafe", "restaurant", "bakery"], "temple": ["temple", "monument"], "monument": ["monument", "temple", "museum"]}
+    "min_candidate_score": 0.4,
+    "category_compatibility": {
+      "hotel": [
+        "hotel",
+        "restaurant",
+        "cafe"
+      ],
+      "restaurant": [
+        "restaurant",
+        "cafe",
+        "bakery"
+      ],
+      "cafe": [
+        "cafe",
+        "restaurant",
+        "bakery"
+      ],
+      "temple": [
+        "temple",
+        "monument"
+      ],
+      "monument": [
+        "monument",
+        "temple",
+        "museum"
+      ]
+    }
+  },
+  "travel": {
+    "detour_factor": 1.3,
+    "speed_kmh": {
+      "walk": 4.5,
+      "bicycle": 12,
+      "motorbike": 25,
+      "car": 22,
+      "auto": 18,
+      "transit": 15
+    },
+    "transit_wait_min": 8,
+    "default_mode": "walk"
+  },
+  "ranking_modes": {
+    "popular": {
+      "quality_from": "popularity",
+      "bonus_tags": [
+        "iconic"
+      ],
+      "min_popularity": 60
+    },
+    "local": {
+      "require_any_tag": [
+        "local",
+        "local_favourite"
+      ],
+      "bonus_tags": [
+        "local",
+        "local_favourite"
+      ]
+    },
+    "hidden_gems": {
+      "max_popularity": 55,
+      "min_quality": 0.55,
+      "exclude_tags": [
+        "crowded",
+        "iconic"
+      ],
+      "bonus_tags": [
+        "hidden_gem",
+        "peaceful",
+        "quiet",
+        "local_favourite"
+      ]
+    }
+  },
+  "crowd": {
+    "crowded_tags": [
+      "crowded"
+    ],
+    "quiet_tags": [
+      "quiet",
+      "peaceful"
+    ],
+    "popularity_crowded_at": 80
   }
 }

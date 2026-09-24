@@ -31,7 +31,7 @@ SERPAPI_KEY=...
 AUTH_SECRET=<any long random string>
 ```
 
-On first start the backend creates the database, imports every pack in `backend/data/packs/` (Hampi), and downloads the embedding model in the background (about 120 MB, once). Until the model is ready, knowledge search uses keyword (BM25) matching and says so in its responses. Check `http://localhost:8000/api/health` to see which services are configured.
+On first start the backend creates the database, imports every pack in `backend/data/packs/` (Hampi), imports the organisers' PS-13 dataset (60 cities, see below), and downloads the embedding model in the background (about 120 MB, once). Until the model is ready, knowledge search uses keyword (BM25) matching and says so in its responses. Check `http://localhost:8000/api/health` to see which services are configured.
 
 ### 2. Frontend
 
@@ -46,8 +46,12 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
 1. Sign up, then pick interests.
 2. On **Start with a place**, choose **Hampi** and optionally turn on your location. The two stay separate: "near me" always means your device location, and "in Hampi" means Hampi.
 3. **Now** shows the local time, weather, daylight left, active advisories (with their stored severity), events, and a grounded briefing.
-4. **Nearby** lists ranked places with distance, open status, fee, visit length, access and "why this suits you". Toggle between *Hampi* and *Near me*.
-5. **Plan** builds a 2h, 4h or full-day plan that checks opening hours, travel time and cost, then re-plans for cheaper, greener or less walking.
+4. **Nearby** lists ranked places with distance, open status, cost against your budget, visit length, access, a confidence badge and "Why this place" bars. Toggle between *Hampi* and *Near me*. You can:
+   * type what you want in plain words, e.g. *peaceful, no museums, under ₹500, within 20 min by bike*. The chips show exactly what was understood;
+   * switch to *Popular*, *Local favourites* or *Hidden gems*, or to *Within my budget*;
+   * open the **Hotels** tab for the best stays around you or the destination, sorted by best match, cheapest, nearest or top rated, with live nightly rates when web search is configured;
+   * use the search box for any place, hotel or destination you've heard of. It tolerates typos (*vitala temple*).
+5. **Plan**: describe the day (*Temples and a sunset spot, no museums, under ₹800*, *Free from 4–8 PM, by bike*), pick a duration and transport, and add must-see places from search. The plan respects opening hours, travel time and the budget. Then re-optimise it from where you are: **Done**, **Staying +15/+30 min**, **Skip**, or **Running 20 min late**. Presets re-plan for cheaper, greener or less walking.
 6. **Ask**: try these:
    * *What should I visit in Hampi tomorrow?* (discovery + forecast + advisories)
    * *Why is Hampi historically important?* (knowledge retrieval)
@@ -55,9 +59,12 @@ npm run dev        # opens on http://localhost:5173, proxies /api to :8000
    * *Where is SLV Hotel in Gandhi Bazaar?* (entity resolution with branch disambiguation)
    * *Is it raining near me?* (weather only, no RAG)
    * *How should I dress for temples?*, *Which places are step-free?*, *Plan my evening around Hampi*
+   * *Compare Virupaksha Temple and Vittala Temple* (side-by-side table)
+   * *Something on my way from Hampi Bazaar to Vittala Temple* (route corridor with detour estimates)
+   * *Give me 3 places only, quiet and free* ("don't waste my time": low-confidence places are dropped)
 
    Tap a numbered chip to see its source. The 🐞 button shows the full retrieval trace in development.
-7. **Profile** sets interests, budget, pace, walking and step-free access, which change ranking and plans. Choosing Kannada or Hindi translates answers and keeps place names.
+7. **Profile** sets interests, a daily spending limit with currency, usual transport, pace, walking and step-free access. These change ranking, budget fit and plans. Choosing Kannada or Hindi translates answers and keeps place names.
 
 ## How a question is answered
 
@@ -88,6 +95,16 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 | Itinerary speeds, fares, CO₂, presets | `backend/data/config/itinerary.json` |
 | Destination packs (destination, POIs, knowledge, facts, advisories, events, provenance) | `backend/data/packs/<name>/` |
 
+### Organisers' dataset (PS-13)
+
+`backend/data/sources/ps13/PS-13.db` is imported read-only at startup (`AUTO_IMPORT_PS13=true`; the mapping is in `data/config/ps13_mapping.json`). The import is additive: a city that matches an existing destination by name and distance (for example Hampi) is merged into it, and other cities become new destinations. It loads POIs, hotels, knowledge and facts, advisories (with the severity as issued), events and daily weather. Money stays exact decimal text with its ISO currency. Every record is tagged with source `dataset` (confidence 0.6), so curated and live data win field conflicts, and disagreements are shown as "sources disagree" rather than hidden. When Open-Meteo is unreachable, the stored `weather_daily` record is used and labelled *not a live forecast*.
+
+### Constraints, confidence and cost
+
+* **Constraint engine** (`app/query/constraints.py`, vocabulary in `intents.json → constraints`) turns free text into structured filters: time window, time available, max cost and currency, price level, minimum rating, travel mode and max travel minutes, open now, crowd, party, "N places only", popular/local/hidden gems, include/exclude categories, avoided tags, and route endpoints. Hidden gems, local favourites and popular are defined by popularity scores and tags in `ranking.json → ranking_modes`, not by hand-picked lists.
+* **Confidence** (`app/ranking/confidence.py`) scores entity, location, hours, price and freshness separately. Conflicts between sources (location more than 1 km apart, open vs closed, different fees) cap the overall confidence.
+* **Cost**: every place and hotel shows its entry fee or nightly rate against your daily budget. Nightly rates come only from a live source (SerpApi Google Hotels). The dataset has no rates, so none are invented.
+
 **Add a destination:** copy `data/packs/hampi` as a template, edit the JSON, then run `python -m app.db.seed --pack data/packs/<name>` (or restart with an empty database). Places without a pack still work: GeoGuide pulls OpenStreetMap POIs on demand and uses live maps search.
 
 **PostgreSQL + PostGIS + pgvector:** set `DATABASE_URL=postgresql+psycopg://user:pass@host/db`. Extensions are enabled automatically when available. `/api/health` reports `postgis`/`pgvector`.
@@ -100,9 +117,11 @@ For example, *"Coffee shops near me"* never calls the LLM for search and never t
 |---|---|
 | `POST /api/ask` | `{question, user_location?, active_destination?, selected_place_id?, language?, debug?}` → grounded answer + structured context |
 | `GET /api/now` | Briefing, weather, daylight, advisories, events, suggestions |
-| `GET /api/nearby` | Ranked places; `origin=auto\|user\|destination`, `category`, `group`, `open_now`, `radius_km` |
-| `GET /api/places/{id}` | Place detail with facts, advisories, provenance |
-| `POST /api/plan` | Itinerary; `duration=2h\|4h\|full\|minutes`, `preset=balanced\|cheaper\|greener\|less_walking`, `previous` for change explanations |
+| `GET /api/nearby` | Ranked places; `origin=auto\|user\|destination`, `category`, `group`, `open_now`, `radius_km`, `text` (free-text constraints), `ranking_mode`, `travel_mode`, `within_budget` |
+| `GET /api/hotels` | Best stays; `sort=best\|cheapest\|nearest\|top_rated`, `check_in`, `nights`, `max_price`, `min_stars`, `within_budget` |
+| `GET /api/search` | `q`, `kind=place\|stay\|destination`: typo-tolerant search over stored places, hotels and destinations, then live maps |
+| `GET /api/places/{id}` | Place detail with facts, advisories, provenance, confidence, cost for you |
+| `POST /api/plan` | Itinerary; `duration=2h\|4h\|full\|minutes`, `preset=balanced\|cheaper\|greener\|less_walking`, `wishes` (free text), `previous` for change explanations, `replan={previous, completed_ids, skipped_ids, current_stop_id, extra_minutes, now}` |
 | `GET /api/destinations`, `/destinations/resolve`, `/destinations/{id}/pack` | Destination search, resolution, and cached knowledge pack |
 | `GET /api/weather`, `/api/location/describe`, `/api/config`, `/api/health` | Supporting endpoints |
 
@@ -115,7 +134,7 @@ cd geoguide/backend && python -m pytest -q
 cd geoguide/frontend && npm run lint && npm run build
 ```
 
-The backend suite (81 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
+The backend suite (101 tests) runs offline against a fictional destination ("Testville"), so it cannot pass by special-casing the demo data. It covers:
 
 * GPS available, missing, stale, low-accuracy or invalid, and "explicit destination vs GPS"
 * A labelled intent set, radius and category hard filters, and ranking precision@3
@@ -125,4 +144,13 @@ The backend suite (81 tests) runs offline against a fictional destination ("Test
 * Weather success and failure, advisory severity and seasons, and web failures
 * Validator catching invented facts, the LLM repair and fallback paths
 * Itineraries: opening hours, locked stops, and re-plan direction
+* Dataset import against a mini database in the organisers' exact schema, the dataset weather fallback, and source conflicts
+* The constraint engine, hidden gems, budget fit, hotels with live rates, plan wishes, re-planning from the current state, route detours, compare and search
 * The full API
+
+## Known limits
+
+* The PS-13 dataset is synthetic. Its facts are treated as a medium-confidence source and labelled.
+* Hotel nightly rates need `SERPAPI_KEY`. Without it, hotels are ranked on class, guest score and distance and marked "price not available".
+* Travel times, fares and detours are straight-line estimates (haversine × detour factor) and are labelled as estimates. There is no routing engine.
+* Not built: image search, offline packs and environmental or habitat data. No data source for them is connected.

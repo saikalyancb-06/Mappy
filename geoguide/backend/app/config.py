@@ -30,6 +30,9 @@ PACKS_DIR = Path(os.getenv("PACKS_DIR", str(DATA_DIR / "packs")))
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'geoguide.db'}")
 # Load every data pack found in PACKS_DIR on startup when the tables are empty.
 AUTO_SEED_PACKS = _bool("AUTO_SEED_PACKS", True)
+# Organiser-provided dataset, imported on start-up when present.
+PS13_DB_PATH = Path(os.getenv("PS13_DB_PATH", str(DATA_DIR / "sources" / "ps13" / "PS-13.db")))
+AUTO_IMPORT_PS13 = _bool("AUTO_IMPORT_PS13", True)
 
 # LLM (Groq, OpenAI-compatible)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

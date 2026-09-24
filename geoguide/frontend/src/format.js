@@ -9,9 +9,15 @@ export const formatDistance = (km) => {
 }
 
 export const formatMoney = (amount, currency) => {
-  if (amount == null) return null
-  if (Number(amount) === 0) return 'Free'
-  return `${CURRENCY[currency] || (currency ? `${currency} ` : '')}${Number(amount).toLocaleString()}`
+  // Exact decimal text in, formatted text out: money never goes through float arithmetic.
+  if (amount == null || amount === '') return null
+  const text = String(amount).trim()
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return null
+  const [whole, fraction = ''] = text.split('.')
+  if (/^-?0+$/.test(whole) && /^0*$/.test(fraction)) return 'Free'
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const cents = fraction.padEnd(2, '0').slice(0, 2)
+  return `${CURRENCY[currency] || (currency ? `${currency} ` : '')}${grouped}${cents === '00' ? '' : `.${cents}`}`
 }
 
 export const formatMinutes = (minutes) => {

@@ -51,7 +51,14 @@
       "half day",
       "full day",
       "route for",
-      "plan my"
+      "plan my",
+      "free from",
+      "free between",
+      "i have",
+      "i've got",
+      "ive got",
+      "free till",
+      "free until"
     ],
     "events": [
       "event",
@@ -357,6 +364,192 @@
     "visit": [
       "see",
       "highlights"
+    ]
+  },
+  "constraints": {
+    "_comment": "Natural-language constraint vocabulary (app/query/constraints.py).",
+    "negations": [
+      "no",
+      "not",
+      "avoid",
+      "skip",
+      "without",
+      "except",
+      "dont want",
+      "don't want",
+      "do not want",
+      "hate",
+      "isn't",
+      "isnt",
+      "aren't",
+      "arent",
+      "never",
+      "nothing"
+    ],
+    "negatable_tags": {
+      "crowded": [
+        "crowded",
+        "busy",
+        "touristy",
+        "crowds",
+        "packed"
+      ],
+      "ticketed": [
+        "ticketed",
+        "paid"
+      ],
+      "outdoor": [
+        "outdoor",
+        "outside",
+        "outdoors"
+      ],
+      "indoor": [
+        "indoor",
+        "indoors"
+      ]
+    },
+    "travel_modes": {
+      "walk": [
+        "walk",
+        "walking",
+        "on foot",
+        "by foot"
+      ],
+      "bicycle": [
+        "bicycle",
+        "cycle",
+        "cycling",
+        "by cycle"
+      ],
+      "motorbike": [
+        "bike",
+        "by bike",
+        "scooter",
+        "scooty",
+        "motorbike",
+        "two wheeler",
+        "moped"
+      ],
+      "car": [
+        "car",
+        "drive",
+        "driving",
+        "cab",
+        "taxi",
+        "uber",
+        "ola"
+      ],
+      "auto": [
+        "auto",
+        "auto rickshaw",
+        "rickshaw",
+        "tuk tuk"
+      ],
+      "transit": [
+        "bus",
+        "metro",
+        "public transport",
+        "train",
+        "transit"
+      ]
+    },
+    "parties": {
+      "solo": [
+        "alone",
+        "solo",
+        "by myself",
+        "on my own"
+      ],
+      "couple": [
+        "couple",
+        "partner",
+        "wife",
+        "husband",
+        "girlfriend",
+        "boyfriend",
+        "date"
+      ],
+      "family": [
+        "family",
+        "kids",
+        "children",
+        "parents"
+      ],
+      "friends": [
+        "friends",
+        "group",
+        "gang"
+      ]
+    },
+    "good_rating_phrases": [
+      "good reviews",
+      "good ratings",
+      "well rated",
+      "highly rated",
+      "top rated",
+      "great reviews",
+      "best rated"
+    ],
+    "good_rating_threshold": 4.0,
+    "cheap_phrases": {
+      "1": [
+        "cheap",
+        "inexpensive",
+        "budget",
+        "low cost",
+        "affordable"
+      ],
+      "2": [
+        "mid range",
+        "mid-range",
+        "moderate",
+        "reasonably priced"
+      ],
+      "4": [
+        "luxury",
+        "fancy",
+        "upscale",
+        "premium"
+      ]
+    },
+    "ranking_modes": {
+      "hidden_gems": [
+        "hidden gem",
+        "hidden gems",
+        "offbeat",
+        "off the beaten",
+        "lesser known",
+        "less known",
+        "undiscovered",
+        "secret"
+      ],
+      "local": [
+        "local favourite",
+        "local favorite",
+        "local favourites",
+        "where locals go",
+        "locals"
+      ],
+      "popular": [
+        "popular",
+        "famous",
+        "top attractions",
+        "iconic"
+      ]
+    },
+    "decide_phrases": [
+      "only",
+      "just",
+      "give me",
+      "top",
+      "pick"
+    ],
+    "rain_phrases": [
+      "raining",
+      "rainy",
+      "it's raining",
+      "its raining",
+      "rain"
     ]
   }
 }

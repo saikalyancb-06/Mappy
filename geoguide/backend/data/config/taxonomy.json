@@ -388,6 +388,54 @@
         "railway=station",
         "amenity=parking"
       ]
+    },
+    "beach": {
+      "kind": "attraction",
+      "group": "nature",
+      "label": "Beach",
+      "search_term": "beaches",
+      "synonyms": [
+        "beach",
+        "beaches",
+        "seaside",
+        "shore"
+      ],
+      "osm": [
+        "natural=beach"
+      ]
+    },
+    "wellness": {
+      "kind": "activity",
+      "group": "wellness",
+      "label": "Wellness",
+      "search_term": "spa wellness",
+      "synonyms": [
+        "wellness",
+        "spa",
+        "ayurveda",
+        "yoga",
+        "massage",
+        "retreat"
+      ],
+      "osm": [
+        "leisure=spa",
+        "amenity=spa"
+      ]
+    },
+    "nightlife": {
+      "kind": "activity",
+      "group": "nightlife",
+      "label": "Live music",
+      "search_term": "live music",
+      "synonyms": [
+        "live music",
+        "music venue",
+        "gig",
+        "gigs"
+      ],
+      "osm": [
+        "amenity=nightclub"
+      ]
     }
   },
   "groups": {
@@ -405,7 +453,8 @@
         "viewpoint",
         "lake",
         "park",
-        "wildlife"
+        "wildlife",
+        "beach"
       ]
     },
     "food": {
@@ -448,7 +497,8 @@
     "nightlife": {
       "label": "Nightlife",
       "categories": [
-        "bar"
+        "bar",
+        "nightlife"
       ]
     },
     "art": {
@@ -471,6 +521,12 @@
         "pharmacy",
         "hospital",
         "transport"
+      ]
+    },
+    "wellness": {
+      "label": "Wellness",
+      "categories": [
+        "wellness"
       ]
     }
   },
@@ -502,10 +558,12 @@
     "budget": [
       "cheap",
       "budget",
-      "free",
       "affordable",
       "inexpensive",
-      "low cost"
+      "low cost",
+      "free entry",
+      "no entry fee",
+      "free of cost"
     ],
     "step_free": [
       "wheelchair",

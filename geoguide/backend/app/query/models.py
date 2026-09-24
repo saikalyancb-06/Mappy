@@ -18,6 +18,8 @@ class IntentType(str, Enum):
     LIVE_INFORMATION = "LIVE_INFORMATION"
     WEB_RESEARCH = "WEB_RESEARCH"
     GENERAL_TRAVEL_QUESTION = "GENERAL_TRAVEL_QUESTION"
+    ROUTE_SUGGESTIONS = "ROUTE_SUGGESTIONS"
+    COMPARE = "COMPARE"
 
 
 @dataclass
@@ -51,8 +53,14 @@ class QueryIntent:
     confidence: float = 0.5
     parser: str = "rules"
     signals: list[str] = field(default_factory=list)
+    constraints: Any = None  # app.query.constraints.Constraints
+    compare_mentions: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
+        constraints = self.constraints
+        self.constraints = None
         data = asdict(self)
+        self.constraints = constraints
         data["intent"] = self.intent.value
+        data["constraints"] = constraints.as_dict() if constraints is not None else None
         return data

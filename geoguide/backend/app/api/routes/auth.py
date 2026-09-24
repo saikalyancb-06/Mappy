@@ -10,11 +10,12 @@ from app.core.rules import taxonomy
 from app.db.models import InteractionEvent, User, UserPreference, utcnow
 from app.db.session import SessionLocal
 from app.services.auth import auth_config, hash_password, issue_token, verify_password
+from app.services.cost import to_decimal
 from app.services.profile import preference_dict, user_from_authorization
 
 router = APIRouter(prefix="/api")
 
-_ALLOWED = {"budget": {"low", "moderate", "high"}, "pace": {"relaxed", "balanced", "packed"}, "walking": {"low", "moderate", "high"}, "language": {"en", "kn", "hi"}}
+_ALLOWED = {"budget": {"low", "moderate", "high"}, "pace": {"relaxed", "balanced", "packed"}, "walking": {"low", "moderate", "high"}, "language": {"en", "kn", "hi"}, "travel_mode": {"walk", "bicycle", "motorbike", "car", "auto", "transit"}}
 
 
 def _auth_user(authorization: str | None) -> User:
@@ -95,6 +96,16 @@ def update_preferences(payload: dict | None, authorization: str | None = Header(
             value = safe.get(key)
             if isinstance(value, str) and value in allowed:
                 setattr(preference, key, value)
+        if "travel_mode" in safe and safe["travel_mode"] is None:
+            preference.travel_mode = None
+        if "max_daily_budget" in safe:
+            amount = to_decimal(safe.get("max_daily_budget"))
+            if safe.get("max_daily_budget") not in (None, "") and (amount is None or amount < 0):
+                raise HTTPException(status_code=422, detail="max_daily_budget must be a non-negative amount, e.g. 2500.00")
+            preference.max_daily_budget = str(amount) if amount is not None else None
+        currency = safe.get("budget_currency")
+        if isinstance(currency, str) and len(currency.strip()) == 3 and currency.strip().isalpha():
+            preference.budget_currency = currency.strip().upper()
         if isinstance(safe.get("interests"), (dict, list)):
             interests = safe["interests"] if isinstance(safe["interests"], dict) else {item: 1 for item in safe["interests"]}
             preference.interests = json.dumps({k: float(v) for k, v in interests.items() if k in valid_interests})
