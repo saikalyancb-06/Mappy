@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, MessageCircle, Navigation, Star } from 'lucide-react'
-import { getPlace, getPlaceCommunity } from '../api'
+import { ChevronLeft, MessageCircle, Navigation, Share2, Star } from 'lucide-react'
+import { getPlace, getPlaceCommunity, getSimilarPlaces } from '../api'
+import { shareText } from '../share'
 import FeedbackSheet from '../components/FeedbackSheet'
 import { AdvisoryList, ConfidenceList, ConflictNote, IconCircleButton, PlaceFacts, SourceBadge, WhyBars } from '../components/ui'
 import { formatMoney, mapsLink, titleCase } from '../format'
 
-export default function PlaceDetailView({ place: initial, context, saved, onSave, onBack, onAsk }) {
+export default function PlaceDetailView({ place: initial, context, saved, onSave, onBack, onAsk, onOpen }) {
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
   const [community, setCommunity] = useState(null)
@@ -22,6 +23,15 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
     getPlace(initial.id, context).then(setDetail).catch((requestError) => setError(requestError.message))
   }, [initial.id, context, storedPlace])
 
+  const [similar, setSimilar] = useState([])
+  const [shareNote, setShareNote] = useState('')
+  useEffect(() => {
+    if (!storedPlace) return undefined
+    let cancelled = false
+    getSimilarPlaces(initial.id).then((result) => { if (!cancelled) setSimilar(result.items || []) }).catch(() => { if (!cancelled) setSimilar([]) })
+    return () => { cancelled = true }
+  }, [initial.id, storedPlace])
+
   const stored = detail?.place || {}
   // Keep what ranking computed for this traveller (reasons, bars, cost fit, travel time) over the plain stored record.
   const place = { ...initial, ...stored, reasons: initial.reasons?.length ? initial.reasons : stored.reasons, bars: initial.bars && Object.keys(initial.bars).length ? initial.bars : stored.bars, cost_for_user: initial.cost_for_user?.kind ? initial.cost_for_user : stored.cost_for_user, confidence_detail: initial.confidence_detail?.label ? initial.confidence_detail : stored.confidence_detail, conflicts: initial.conflicts?.length ? initial.conflicts : stored.conflicts, travel_min: initial.travel_min ?? stored.travel_min, detour_min: initial.detour_min, price_per_night: initial.price_per_night || stored.price_per_night, price_currency: initial.price_currency || stored.price_currency, price_source: initial.price_source || stored.price_source }
@@ -29,7 +39,7 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
   const foreignFee = formatMoney(place.entry_fee_foreign, place.fee_currency)
   return <div className="detail-view">
     <header className="detail-header"><IconCircleButton label="Back" onClick={onBack}><ChevronLeft size={22} /></IconCircleButton><span className="status-pill"><SourceBadge place={place} /></span></header>
-    <div className="detail-art"><div className="place-art" /><div className="detail-title"><span className="category-label">{titleCase(place.category || place.kind)}{place.neighborhood ? ` · ${place.neighborhood}` : ''}</span><h1>{place.name}</h1></div></div>
+    <div className="detail-art"><div className="place-art" style={place.image_url ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.45)), url("${String(place.image_url).replace(/["\\\n\r()]/g, '')}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined} /><div className="detail-title"><span className="category-label">{titleCase(place.category || place.kind)}{place.neighborhood ? ` · ${place.neighborhood}` : ''}</span><h1>{place.name}</h1></div></div>
     <section className="detail-sheet">
       <button className={`detail-save ${saved ? 'saved' : ''}`} aria-label={saved ? 'Remove from plan' : 'Add to plan'} onClick={() => onSave(place)} type="button">★</button>
       <PlaceFacts place={place} />
@@ -73,7 +83,16 @@ export default function PlaceDetailView({ place: initial, context, saved, onSave
       <div className="detail-actions">
         <button className="secondary-button" onClick={() => onAsk(place)} type="button"><MessageCircle size={17} /> Ask about it</button>
         {link ? <a className="primary-button" href={link} target="_blank" rel="noopener noreferrer"><Navigation size={17} /> Navigate</a> : <button className="primary-button" disabled type="button">No map location</button>}
+        <button className="secondary-button" type="button" onClick={async () => { const outcome = await shareText({ title: place.name, text: `${place.name}${place.address ? ` — ${place.address}` : ''}`, url: link || undefined }); setShareNote(outcome === 'copied' ? 'Copied to share.' : outcome === 'failed' ? 'Sharing is not available here.' : '') }}><Share2 size={17} /> Share</button>
       </div>
+      {shareNote && <p className="muted-text">{shareNote}</p>}
+      {similar.length > 0 && onOpen && <>
+        <h2>More like this</h2>
+        <div className="similar-list">{similar.map((item) => <button key={item.id} type="button" className="similar-item" onClick={() => onOpen(item)}>
+          <strong>{item.name}</strong>
+          <small>{[item.similar_because?.[0], item.rating ? `★ ${item.rating}` : null, item.distance_km != null ? `${item.distance_km < 1 ? `${Math.round(item.distance_km * 1000)} m` : `${item.distance_km.toFixed(1)} km`} away` : null].filter(Boolean).join(' · ')}</small>
+        </button>)}</div>
+      </>}
     </section>
     {rating && <FeedbackSheet place={place} onClose={() => setRating(false)} onSaved={(saved) => saved.community && setCommunity((current) => ({ ...(current || {}), ...saved.community, recent: current?.recent || [] }))} />}
   </div>

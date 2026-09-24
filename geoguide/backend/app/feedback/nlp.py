@@ -7,6 +7,7 @@ the traveller's original words; it never overrides what they selected.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -36,7 +37,12 @@ def _occurrences(norm: str, phrase: str) -> list[int]:
     target = normalize(phrase)
     if not target:
         return []
-    return [m.start() for m in re.finditer(rf"(?:^|(?<=\s)){re.escape(target)}(?=\s|$)", norm)]
+    return [m.start() for m in _occurrence_pattern(target).finditer(norm)]
+
+
+@lru_cache(maxsize=4096)
+def _occurrence_pattern(target: str) -> re.Pattern[str]:
+    return re.compile(rf"(?:^|(?<=\s)){re.escape(target)}(?=\s|$)")
 
 
 def _negated(norm: str, position: int, negations: set[str]) -> bool:

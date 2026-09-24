@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { CheckCircle2, Clock3, Footprints, Layers, Leaf, Lock, PiggyBank, Sparkles, Sunset } from 'lucide-react'
+import { CalendarPlus, CheckCircle2, Clock3, Footprints, Layers, Leaf, Lock, Map as MapIcon, PiggyBank, Share2, Sparkles, Sunset } from 'lucide-react'
 import { buildPlan, getPlanDeck } from '../api'
+import { downloadFile, mapsRouteUrl, planSummary, planToIcs, shareText } from '../share'
 import SearchBox from '../components/SearchBox'
 import SwipeDeck from '../components/SwipeDeck'
 import FeedbackSheet from '../components/FeedbackSheet'
@@ -22,6 +23,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
   const [wishes, setWishes] = useState('')
   const [travelMode, setTravelMode] = useState(profile?.travel_mode || null)
   const [plan, setPlan] = useState(null)
+  const [shareNote, setShareNote] = useState('')
   const [done, setDone] = useState([])
   const [weather, setWeather] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -127,6 +129,12 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
             </div>}
           </div>
         </div>)}
+      </div>}
+      {plan.stops.length > 0 && <div className="export-row">
+        <button type="button" className="chip" onClick={() => { const ics = planToIcs(plan, context.destination?.name); if (ics) downloadFile(`geoguide-plan-${(plan.start || '').slice(0, 10) || 'day'}.ics`, ics) }}><CalendarPlus size={15} /> Add to calendar</button>
+        {mapsRouteUrl(plan.stops, { origin: context.userLocation, mode: profile?.travel_mode }) && <a className="chip" href={mapsRouteUrl(plan.stops, { origin: context.userLocation, mode: profile?.travel_mode })} target="_blank" rel="noopener noreferrer"><MapIcon size={15} /> Route in Maps</a>}
+        <button type="button" className="chip" onClick={async () => { const outcome = await shareText({ title: 'My GeoGuide plan', text: planSummary(plan, context.destination?.name), url: mapsRouteUrl(plan.stops, { mode: profile?.travel_mode }) }); setShareNote(outcome === 'copied' ? 'Plan copied — paste it anywhere.' : outcome === 'failed' ? 'Could not share from this browser.' : '') }}><Share2 size={15} /> Share</button>
+        {shareNote && <span className="muted-text">{shareNote}</span>}
       </div>}
       {plan.stops.length > 0 && <button type="button" className="secondary-button full-width" disabled={busy} onClick={() => replanFrom({ extra_minutes: 20 })}><Clock3 size={16} /> Running 20 min late — re-plan the rest</button>}
       {totals && <div className="context-grid totals">

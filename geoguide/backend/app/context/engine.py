@@ -22,6 +22,7 @@ from app.context.season import season_for
 from app.context.tips import build_tips
 from app.core.cache import cache_get, cache_set
 from app.core.dates import DateRange, single
+from app.core.concurrency import run_parallel
 from app.core.logging import Trace
 from app.core.rules import load_rules, taxonomy
 from app.events.service import city_events
@@ -29,7 +30,7 @@ from app.geo.city import City
 from app.geo.geo_context import ActiveReference, destination_by_id
 from app.knowledge.context import SERIOUS, active_advisories, weather_notices
 from app.llm.evidence import EvidenceBuilder
-from app.llm.generator import generate
+from app.llm.generator import deterministic_answer, generate
 from app.llm.prompts import AnswerContext
 from app.retrieval.knowledge import KnowledgeHit, retrieve
 from app.search.serpapi import SerpApiClient
@@ -67,6 +68,7 @@ def build_city_context(
     language: str = "en",
     web: SerpApiClient | None = None,
     live_events: bool = True,
+    briefing_mode: str = "full",  # full | deferred (verified-data briefing now; the AI briefing is fetched separately)
 ) -> dict[str, Any]:
     trace = Trace("city_context")
     config = load_rules("context")
@@ -76,23 +78,32 @@ def build_city_context(
     errors: list[dict[str, str]] = []
 
     season = season_for(city, selected)
-    weather = weather_on(city.lat, city.lon, selected, timezone_name=city.timezone, destination_id=city.destination_id)
-    if weather.get("status") != "ok":
-        errors.append(weather.get("error") or {"source": "open_meteo", "code": "unavailable", "message": "Weather unavailable"})
-    events = city_events(city, window, today=today, user_point=user_point, live=live_events, web=web)
-    errors.extend(s["error"] for s in events["sources_checked"] if s.get("status") == "error" and s.get("error"))
-    advisories = active_advisories(city.destination_id, selected) + (weather_notices(weather) if weather.get("basis") == "forecast" else [])
-
-    about = knowledge(city, "place", config["about_sections"], limit=4)
-    culture = knowledge(city, "culture", config["culture_sections"], limit=3)
-
     reference = city_reference(city)
     local_time = local_now(city.timezone) if selected == today else datetime.combine(selected, time(10, 0), tzinfo=local_now(city.timezone).tzinfo)
-    attractions = discover(DiscoveryRequest(
-        reference=reference, profile_name="discovery", kinds=set(taxonomy()["attraction_kinds"]), user=profile or {},
-        local_time=local_time, time_sensitive=selected == today, weather_signals=weather.get("signals") or [],
-        limit=config["attractions_limit"], user_point=user_point,
-    ), trace=trace)
+
+    def weather_then_attractions() -> tuple[dict[str, Any], Any]:
+        # Attractions use the weather's signals, so these two run as one chain.
+        found = weather_on(city.lat, city.lon, selected, timezone_name=city.timezone, destination_id=city.destination_id)
+        places = discover(DiscoveryRequest(
+            reference=reference, profile_name="discovery", kinds=set(taxonomy()["attraction_kinds"]), user=profile or {},
+            local_time=local_time, time_sensitive=selected == today, weather_signals=found.get("signals") or [],
+            limit=config["attractions_limit"], user_point=user_point,
+        ), trace=trace)
+        return found, places
+
+    # Independent network/database work runs at the same time; the page waits for the slowest part only.
+    parts = run_parallel({
+        "weather_attractions": weather_then_attractions,
+        "events": lambda: city_events(city, window, today=today, user_point=user_point, live=live_events, web=web),
+        "about": lambda: knowledge(city, "place", config["about_sections"], limit=4),
+        "culture": lambda: knowledge(city, "culture", config["culture_sections"], limit=3),
+    })
+    weather, attractions = parts["weather_attractions"]
+    events, about, culture = parts["events"], parts["about"], parts["culture"]
+    if weather.get("status") != "ok":
+        errors.append(weather.get("error") or {"source": "open_meteo", "code": "unavailable", "message": "Weather unavailable"})
+    errors.extend(s["error"] for s in events["sources_checked"] if s.get("status") == "error" and s.get("error"))
+    advisories = active_advisories(city.destination_id, selected) + (weather_notices(weather) if weather.get("basis") == "forecast" else [])
     errors.extend(attractions.provider_errors)
     if selected != today:
         # "Open now" only means something today; other dates keep the stored opening hours instead.
@@ -121,6 +132,12 @@ def build_city_context(
     cached = cache_get("city_briefing", cache_key)
     if cached:
         briefing = cached["data"]
+    elif briefing_mode == "deferred":
+        # Don't make the page wait for the language model: a deterministic briefing from the same verified
+        # evidence is shown at once, and the client asks /api/context/briefing for the AI version.
+        interim = AnswerContext(question=f"Briefing for {city.label}", intent="BRIEFING", location_notes=[], evidence=evidence.items,
+                                extra={"lead": f"{city.name} — {window.label}.", "empty_message": f"I have little verified information for {city.name} on {window.label}.", "no_events_message": events["message"]})
+        briefing = {"text": deterministic_answer(interim), "mode": "deterministic", "language": "en", "validation": None, "sources": [item.as_dict() for item in evidence.items], "pending": True}
     else:
         when = "today" if selected == today else f"on {window.label}"
         context = AnswerContext(

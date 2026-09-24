@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BedDouble, CalendarDays, ChevronLeft, ChevronRight, Compass, MessageCircle, Plus, RefreshCw, UtensilsCrossed, Volume2 } from 'lucide-react'
-import { getCityContext, getEventsOverview, getHotels, getNearby } from '../api'
+import { getCityBriefing, getCityContext, getEventsOverview, getHotels, getNearby } from '../api'
 import RichText from '../components/RichText'
 import SearchBox from '../components/SearchBox'
 import EventSubmitSheet from '../components/EventSubmitSheet'
@@ -76,6 +76,16 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
   const [hotels, loadHotels] = useLatest(useCallback(() => getHotels(context, { origin }), [context, origin]))
 
   useEffect(() => { const t = window.setTimeout(loadContext, 0); return () => window.clearTimeout(t) }, [loadContext])
+  // The page arrives with a verified-data briefing; the AI briefing follows without blocking anything.
+  const [aiBriefing, setAiBriefing] = useState(null)
+  const pendingBriefing = Boolean(ctx.data?.briefing?.pending)
+  useEffect(() => {
+    if (!pendingBriefing) return undefined
+    let cancelled = false
+    const key = `${ctx.data.city?.key}|${ctx.data.date?.selected}|${language}`
+    getCityBriefing(context, { date: ctx.data.date?.selected, language }).then((result) => { if (!cancelled) setAiBriefing({ key, briefing: result.briefing }) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [pendingBriefing, ctx.data, context, language])
   useEffect(() => {
     if (mode !== 'happening' || !selected) return undefined
     const t = window.setTimeout(loadEvents, 0)
@@ -88,7 +98,8 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
     return () => window.clearTimeout(t)
   }, [mode, loadFood, loadHotels])
 
-  const data = ctx.data
+  const briefingKey = `${ctx.data?.city?.key}|${ctx.data?.date?.selected}|${language}`
+  const data = ctx.data && aiBriefing?.key === briefingKey ? { ...ctx.data, briefing: aiBriefing.briefing } : ctx.data
   const city = data?.city
   const dateLabel = formatDay(selected) || ''
   const speak = () => {
@@ -119,7 +130,7 @@ export default function ExploreView({ context, language, selectedDate, onDateCha
 
     {data && mode === 'overview' && <>
       <section className={`briefing-card ${ctx.loading ? 'is-stale' : ''}`}>
-        <div className="verified-row"><span className="verified-dot" /> Briefing for {dateLabel}<span className="verified-badge">{data.briefing.mode === 'deterministic' ? 'From verified data' : 'Grounded AI summary'}</span></div>
+        <div className="verified-row"><span className="verified-dot" /> Briefing for {dateLabel}<span className="verified-badge">{data.briefing.pending ? 'Verified data · AI summary on the way' : data.briefing.mode === 'deterministic' ? 'From verified data' : 'Grounded AI summary'}</span></div>
         <RichText text={data.briefing.text} sources={data.briefing.sources} />
         <button type="button" className="secondary-button listen-button" onClick={speak}><Volume2 size={16} /> Listen</button>
       </section>

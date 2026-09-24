@@ -9,8 +9,10 @@ aggregator). Nothing is invented: unreadable dates drop the result.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from app.context.season import season_for
+from app.core.concurrency import map_parallel
 from app.core.rules import load_rules
 from app.core.text import normalize
 from app.events.extract import clean_title, combine, listing_dates, listing_times, venue_from_text
@@ -68,12 +70,19 @@ class WebEventProvider(EventProvider):
         rules = load_rules("events")["web_queries"]
         seen_urls: set[str] = set()
         errors = []
-        for text in build_queries(query):
-            result.queries.append(text)
+        queries = build_queries(query)
+        result.queries.extend(queries)
+
+        def fetch(text: str) -> Any:
             try:
-                response = self.web.search(text, engine="google", limit=rules["results_per_query"])
+                return self.web.search(text, engine="google", limit=rules["results_per_query"])
             except SearchProviderError as exc:
-                errors.append(exc.as_dict())
+                return exc
+
+        # The queries are independent: send them together, then read the answers in order.
+        for response in map_parallel(fetch, queries):
+            if isinstance(response, SearchProviderError):
+                errors.append(response.as_dict())
                 continue
             retrieved = datetime.fromisoformat(response.retrieved_at.replace("Z", "+00:00")) if response.retrieved_at else datetime.now(timezone.utc)
             result.cached = result.cached or response.cached

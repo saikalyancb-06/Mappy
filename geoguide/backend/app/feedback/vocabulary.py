@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.rules import load_rules
-from app.core.text import normalize
+from app.core.text import normalize, word_pattern
 from app.db.models import Aspect, Vibe
 from app.db.session import SessionLocal
 
@@ -132,7 +132,7 @@ def normalize_custom_vibe(text: str) -> tuple[str, str]:
     if letters < rules["min_letters"] or any(ch.isdigit() for ch in cleaned):
         raise InvalidCustomVibe("A custom vibe should be a word or two, like 'artsy' or 'spiritual'.")
     norm = normalize(cleaned)
-    if any(re.search(rf"\b{re.escape(word)}\b", norm) for word in rules["blocked_words"]):
+    if any(word_pattern(word).search(norm) for word in rules["blocked_words"]):
         raise InvalidCustomVibe("That vibe can't be used.")
     synonyms = {normalize(k): v for k, v in config()["vibe_synonyms"].items()}
     controlled = {normalize(entry["label"]): entry["key"] for entry in config()["vibes"]} | {normalize(entry["key"].replace("_", " ")): entry["key"] for entry in config()["vibes"]}

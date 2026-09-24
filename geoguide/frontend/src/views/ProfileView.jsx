@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Check, LogOut } from 'lucide-react'
 import { getMyVibes } from '../api'
+import SavedPlaces from '../components/SavedPlaces'
 import SubmissionsPanel from '../components/SubmissionsPanel'
 import { Chip, SectionTitle } from '../components/ui'
 import { titleCase } from '../format'
 
-export default function ProfileView({ user, config, preferences, onSave, onLogout }) {
+export default function ProfileView({ user, config, preferences, onSave, onLogout, savedIds = [], onToggleSaved, onOpen }) {
   const [draft, setDraft] = useState(preferences)
   const [status, setStatus] = useState('')
   const [vibes, setVibes] = useState(null)
@@ -41,6 +42,7 @@ export default function ProfileView({ user, config, preferences, onSave, onLogou
         {vibes.avoids.length > 0 && <p className="muted-text">You've flagged: {vibes.avoids.map((item) => item.label.toLowerCase()).join(', ')}</p>}
         <p className="muted-text">Based on {vibes.feedback_count} place{vibes.feedback_count === 1 ? '' : 's'} you rated{vibes.status === 'emerging' ? ' — still learning' : ''}.</p>
       </div>)}
+    {onToggleSaved && <SavedPlaces savedIds={savedIds} onToggleSaved={onToggleSaved} onOpen={onOpen} />}
     <SubmissionsPanel />
     <SectionTitle eyebrow="Interests">What you care about</SectionTitle>
     <div className="chip-row wrap">{(config?.interests || []).map((item) => <Chip key={item.id} active={interests.includes(item.id)} onClick={() => toggleInterest(item.id)}>{interests.includes(item.id) && <Check size={14} />}{item.label}</Chip>)}</div>

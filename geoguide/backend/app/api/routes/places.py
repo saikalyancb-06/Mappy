@@ -20,6 +20,7 @@ from app.services.discovery import DiscoveryRequest, discover
 from app.services.hotels import HotelRequest, find_hotels
 from app.services.search import search
 from app.services.now_service import build_now
+from app.services.similar import similar_places
 from app.services.profile import resolve_profile
 from app.weather.open_meteo import get_weather, local_now
 
@@ -117,6 +118,12 @@ def place_detail(poi_id: str, lat: float | None = None, lon: float | None = None
     data = candidate.as_dict()
     data["distance_from_user_km"] = distance_from_user(geo, candidate.lat, candidate.lon)
     return {"place": data, "facts": facts, "advisories": advisories, "destination": {"id": destination.id, "name": destination.name} if destination else None, "local_time": now_local.isoformat(timespec="minutes"), "location_status": geo.location_status}
+
+
+@router.get("/places/{poi_id}/similar")
+def place_similar(poi_id: str, limit: int = Query(6, ge=1, le=20), authorization: str | None = Header(default=None)) -> dict:
+    """'More like this' for a place: same category or kind, shared vibes, quality and closeness."""
+    return {"items": similar_places(poi_id, profile=resolve_profile(authorization), limit=limit)}
 
 
 @router.get("/hotels")

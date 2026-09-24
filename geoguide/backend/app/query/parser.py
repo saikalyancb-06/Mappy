@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 
 from app.core.rules import load_rules, taxonomy
-from app.core.text import normalize
+from app.core.text import has_phrase, normalize
 from app.query.constraints import parse_constraints
 from app.query.models import IntentType, QueryIntent, TemporalConstraint
 
@@ -40,13 +40,13 @@ _PRONOUN_SUBJECT = re.compile(r"^\s*(?:is|was|does|will|can|how|what\s+about)\s+
 def _cue(norm: str, phrases: list[str]) -> str | None:
     for phrase in sorted(phrases, key=len, reverse=True):
         target = normalize(phrase)
-        if target and re.search(rf"(?:^|\s){re.escape(target)}(?:\s|$)", norm):
+        if target and has_phrase(norm, target):
             return phrase
     return None
 
 
 def _all_cues(norm: str, phrases: list[str]) -> list[str]:
-    return [phrase for phrase in phrases if re.search(rf"(?:^|\s){re.escape(normalize(phrase))}(?:\s|$)", norm)]
+    return [phrase for phrase in phrases if has_phrase(norm, phrase)]
 
 
 def _vocabulary_words() -> set[str]:
@@ -157,12 +157,12 @@ def _category(norm: str) -> tuple[str | None, str | None]:
     for category_id, entry in taxonomy()["categories"].items():
         for synonym in entry["synonyms"]:
             target = normalize(synonym)
-            if target and re.search(rf"(?:^|\s){re.escape(target)}(?:\s|$)", norm):
+            if target and has_phrase(norm, target):
                 if best is None or len(target) > best[0]:
                     best = (len(target), category_id)
     group = None
     for group_id, entry in taxonomy()["groups"].items():
-        if re.search(rf"(?:^|\s){re.escape(normalize(entry['label']))}(?:\s|$)", norm) or re.search(rf"(?:^|\s){re.escape(group_id)}(?:\s|$)", norm):
+        if has_phrase(norm, entry["label"]) or has_phrase(norm, group_id):
             group = group_id
             break
     return (best[1] if best else None), group
@@ -292,7 +292,7 @@ def parse_query(text: str, *, has_selected_entity: bool = False) -> QueryIntent:
     category_text = norm
     for mention in (entity, place):
         if mention:
-            category_text = re.sub(rf"(?:^|\s){re.escape(normalize(mention))}(?:\s|$)", " ", category_text)
+            category_text = f" {category_text} ".replace(f" {normalize(mention)} ", " ").strip()
     category, group = _category(category_text)
     preferences = _preferences(norm)
 

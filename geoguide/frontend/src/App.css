@@ -432,3 +432,14 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .location-cta:disabled { opacity: .7; }
 .destination-list-title { margin-bottom: -10px; }
 .destination-option.is-here { outline: 2px solid var(--forest); }
+
+/* plan export and place sharing */
+.export-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+.export-row .chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.similar-list { display: grid; gap: 8px; }
+.similar-item { display: grid; gap: 2px; width: 100%; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.8); text-align: left; color: var(--forest); }
+.similar-item small { color: var(--muted); }
+.saved-row { grid-template-columns: 1fr auto; align-items: center; }
+.saved-row small { grid-column: 1 / -1; }
+.saved-actions { grid-column: 1 / -1; display: flex; gap: 6px; }
+.saved-actions .chip { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }

@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.config import GROQ_API_KEY, GROQ_BASE_URL, GROQ_MODEL_FAST, GROQ_MODEL_REASONING, LLM_TIMEOUT_SECONDS
+from app.core.http import shared_client
 
 logger = logging.getLogger(__name__)
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -45,8 +46,7 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
         started = time.monotonic()
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(f"{self.base_url}/chat/completions", headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, json=payload)
+            response = shared_client().post(f"{self.base_url}/chat/completions", headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, json=payload, timeout=self.timeout)
         except httpx.TimeoutException:
             raise LLMUnavailable("timeout", "The language model timed out.") from None
         except httpx.HTTPError as exc:

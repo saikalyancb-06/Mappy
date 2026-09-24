@@ -21,7 +21,7 @@ from app.core.text import normalize
 from app.db.models import CityEnrichmentComponent, Destination, EntityAlias, Poi
 from app.db.session import SessionLocal
 from app.geo.distance import haversine_km, valid_coordinates
-from app.geo.geocoding import city_extent_km, destination_aliases, nearest_destination
+from app.geo.geocoding import city_extent_km, destination_aliases, invalidate_destination_index, nearest_destination
 
 STATUSES = ("NOT_STARTED", "QUEUED", "ENRICHING", "PARTIAL", "READY", "FAILED", "STALE")
 SAME_CITY_KM = 60.0
@@ -96,7 +96,8 @@ def get_or_create_city(place: dict[str, Any]) -> tuple[Destination, bool]:
         db.add(EntityAlias(entity_type="destination", entity_id=new_id, alias=name, normalized=normalize(name)))
         db.commit()
         db.refresh(destination)
-        return destination, True
+    invalidate_destination_index()
+    return destination, True
 
 
 def components_config() -> dict[str, dict[str, Any]]:
