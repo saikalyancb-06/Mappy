@@ -104,7 +104,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
       <button type="button" className="link-button" onClick={resetDeck}>Close the cards</button>
     </>}
     <button className="primary-button full-width" onClick={() => run()} disabled={busy} type="button"><Sparkles size={17} /> {busy ? 'Planning…' : deck && liked.length ? `Build plan with my ${liked.length} pick${liked.length > 1 ? 's' : ''}` : plan ? 'Rebuild plan' : 'Build my plan'}</button>
-    {(liked.length > 0 || passed.length > 0) && <p className="muted-text">{liked.length} to visit (kept in the plan when they fit) · {passed.length} skipped (left out)</p>}
+    {(liked.length > 0 || passed.length > 0) && <p className="muted-text">{liked.length} to visit (kept in your plan) · {passed.length} skipped (left out)</p>}
     {error && <StateMessage title="Could not build a plan" body={error} />}
     {plan && <>
       <Understood items={plan.understood} />
@@ -115,7 +115,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
         {plan.stops.map((stop, index) => <div className="timeline-stop" key={stop.poi_id}>
           <span className="stop-number">{stop.position}</span>
           <div>
-            <span className="eyebrow">{stop.arrive}–{stop.depart}{stop.locked ? ' · must-see' : ''}{stop.confidence ? ` · ${stop.confidence} confidence` : ''}</span>
+            <span className="eyebrow">{stop.arrive}–{stop.depart}{stop.locked ? ' · selected' : ''}{stop.confidence ? ` · ${stop.confidence} confidence` : ''}</span>
             <h3><button type="button" className="link-button" onClick={() => onOpen({ id: stop.poi_id, name: stop.name, category: stop.category, lat: stop.lat, lon: stop.lon, reasons: stop.reasons, sources: [] })}>{stop.name}</button></h3>
             <p>{MODE[stop.leg.mode] || stop.leg.mode} {formatMinutes(stop.leg.minutes)} · {formatDistance(stop.leg.distance_km)} from {stop.leg.from}{stop.leg.cost ? ` · ~${formatMoney(String(stop.leg.cost), stop.fee_currency)}` : ''}</p>
             {stop.timing_note && <p className="timing-note"><Sunset size={13} /> {stop.timing_note.charAt(0).toUpperCase() + stop.timing_note.slice(1)}{stop.free_min ? ` · ${formatMinutes(stop.free_min)} free before this` : ''}</p>}
@@ -148,7 +148,7 @@ export default function PlanView({ context, config, savedIds, onToggleSaved, onO
       <SectionTitle eyebrow="Re-plan">Choose what matters</SectionTitle>
       <div className="replan-row">{PRESETS.filter((preset) => (config?.plan_presets || []).includes(preset.id)).map(({ id, label, Icon }) => <Chip key={id} active={plan.preset === id} disabled={busy} onClick={() => run({ preset: id, previous: plan })}><Icon size={15} /> {label}</Chip>)}</div>
       <Notices items={[...(plan.warnings || []), ...notices]} />
-      {plan.unscheduled?.length > 0 && <details className="unscheduled"><summary>{plan.unscheduled.length} places didn't fit</summary><ul>{plan.unscheduled.map((item) => <li key={item.id}>{item.name} — {item.reason}</li>)}</ul></details>}
+      {plan.unscheduled?.length > 0 && <details className="unscheduled"><summary>{plan.unscheduled.filter(u => u.status === 'BLOCKED').length || plan.unscheduled.length} place{(plan.unscheduled.filter(u => u.status === 'BLOCKED').length || plan.unscheduled.length) > 1 ? 's' : ''} couldn't be visited</summary><ul>{plan.unscheduled.map((item) => <li key={item.id}>{item.name} — {item.reason}</li>)}</ul></details>}
     </>}
     {feedbackFor && <FeedbackSheet place={feedbackFor} onClose={() => setFeedbackFor(null)} />}
   </div>

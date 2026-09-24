@@ -97,8 +97,8 @@ def _weather_factor(candidate: Candidate, when: datetime, request: PlanRequest) 
     return 1.0, None
 
 
-def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | None:
-    """Schedule stops in order; return None if any hard constraint fails."""
+def _simulate(order: list[Candidate], request: PlanRequest, allow_overrun: bool = False) -> dict[str, Any] | None:
+    """Schedule stops in order; return None if any hard constraint fails for optional candidates."""
     config = load_rules("itinerary")
     end_limit = request.start_time + timedelta(minutes=request.duration_min)
     clock = request.start_time
@@ -122,20 +122,27 @@ def _simulate(order: list[Candidate], request: PlanRequest) -> dict[str, Any] | 
             if status["status"] == "closed" and status.get("opens_at") and ":" in status["opens_at"] and " " not in status["opens_at"]:
                 opens = datetime.strptime(status["opens_at"], "%H:%M").time()
                 opens_dt = arrive.replace(hour=opens.hour, minute=opens.minute, second=0, microsecond=0)
-                wait = int((opens_dt - arrive).total_seconds() // 60)
-                if wait > (config["max_first_wait_min"] if not stops else config["max_wait_for_opening_min"]):
+                w = int((opens_dt - arrive).total_seconds() // 60)
+                if w > (config["max_first_wait_min"] if not stops else config["max_wait_for_opening_min"]) and not allow_overrun:
                     return None  # the first stop may start the day a little later, at its opening time
-                arrive = opens_dt
+                if w <= (config["max_first_wait_min"] if not stops else config["max_wait_for_opening_min"]):
+                    wait = w
+                    arrive = opens_dt
             ok = opening_hours.open_for_window(hours, arrive, arrive + timedelta(minutes=visit))
             if ok is False:
-                return None
-            open_check = "verified_open" if ok else "hours_unknown"
+                open_check = "verified_closed"
+                if not allow_overrun:
+                    return None
+            elif ok is True:
+                open_check = "verified_open"
+            else:
+                open_check = "hours_unknown"
         depart = arrive + timedelta(minutes=visit)
-        if depart > end_limit:
+        if depart > end_limit and not allow_overrun:
             return None
         if request.budget_cap is not None:
             known = Decimal(str(totals["cost"])) + (to_decimal(leg.cost) or Decimal(0)) + (to_decimal(candidate.entry_cost) or Decimal(0))
-            if known > request.budget_cap:
+            if known > request.budget_cap and not allow_overrun:
                 return None
         factor, weather_note = _weather_factor(candidate, arrive, request)
         value = (candidate.score or 0.3) * factor
@@ -165,37 +172,76 @@ def _objective(simulation: dict[str, Any], request: PlanRequest) -> float:
 
 def optimise(request: PlanRequest) -> dict[str, Any]:
     config = load_rules("itinerary")
-    pool = [c for c in request.candidates if c.id not in set(request.excluded_ids) and c.lat is not None]
-    locked = [c for lid in request.locked_ids for c in pool if c.id == lid]
-    order: list[Candidate] = []
+    pool = [c for c in request.candidates if c.id not in set(request.excluded_ids) and c.lat is not None and not getattr(c, "permanently_closed", False)]
+
+    # Identify locked/committed candidates
+    locked_set = set(request.locked_ids)
+    locked_candidates = []
     unscheduled: list[dict[str, Any]] = []
-    for candidate in locked:
-        # Must-sees have no order of their own: put each where it fits best (a sunset spot's
-        # not-before time still pushes it late).
+
+    for lid in request.locked_ids:
+        c = next((cand for cand in request.candidates if cand.id == lid), None)
+        if c:
+            if getattr(c, "permanently_closed", False):
+                unscheduled.append({
+                    "id": c.id,
+                    "name": c.name,
+                    "status": "BLOCKED",
+                    "reason": "Permanently closed"
+                })
+            elif c not in locked_candidates:
+                locked_candidates.append(c)
+        else:
+            from app.geo.spatial import get_pois
+            extra = get_pois([lid], request.start_point)
+            if extra:
+                ex = extra[0]
+                if getattr(ex, "permanently_closed", False):
+                    unscheduled.append({
+                        "id": ex.id,
+                        "name": ex.name,
+                        "status": "BLOCKED",
+                        "reason": "Permanently closed"
+                    })
+                elif ex not in locked_candidates:
+                    pool.append(ex)
+                    locked_candidates.append(ex)
+            else:
+                unscheduled.append({
+                    "id": lid,
+                    "name": f"Place {lid}",
+                    "status": "BLOCKED",
+                    "reason": "Place data unavailable"
+                })
+
+    order: list[Candidate] = []
+    for candidate in locked_candidates:
         fits = []
         for index in range(len(order) + 1):
             trial = order[:index] + [candidate] + order[index:]
-            simulation = _simulate(trial, request)
-            if simulation is not None:
-                fits.append((_objective(simulation, request), index))
-        if not fits:
-            unscheduled.append({"id": candidate.id, "name": candidate.name, "reason": "locked stop does not fit the time window or opening hours"})
-        else:
+            sim = _simulate(trial, request, allow_overrun=True)
+            if sim is not None:
+                fits.append((_objective(sim, request), index))
+        if fits:
             order.insert(max(fits)[1], candidate)
+        else:
+            order.append(candidate)
+
     remaining = [c for c in pool if c not in order]
-    current = _simulate(order, request) or {"stops": [], "totals": {"value": 0}}
+    current = _simulate(order, request, allow_overrun=True) or {"stops": [], "totals": {"value": 0}}
     current_score = _objective(current, request) if order else 0.0
+
     while remaining and len(order) < config["max_stops"]:
         best: tuple[float, int, Candidate, dict[str, Any]] | None = None
         for candidate in remaining:
             for index in range(len(order) + 1):
                 trial = order[:index] + [candidate] + order[index:]
-                simulation = _simulate(trial, request)
-                if simulation is None:
+                sim = _simulate(trial, request, allow_overrun=False)
+                if sim is None:
                     continue
-                score = _objective(simulation, request)
+                score = _objective(sim, request)
                 if score > current_score and (best is None or score > best[0]):
-                    best = (score, index, candidate, simulation)
+                    best = (score, index, candidate, sim)
         if best is None:
             break
         current_score, index, candidate, current = best
@@ -206,16 +252,40 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
     for candidate in [c for c in remaining if c.id not in reported][:10]:
         unscheduled.append({"id": candidate.id, "name": candidate.name, "reason": "did not fit the time window, opening hours or preferences as well as the chosen stops"})
 
-    simulation = _simulate(order, request) if order else {"stops": [], "totals": {"travel_min": 0, "visit_min": 0, "wait_min": 0, "cost": 0.0, "cost_unknown_items": 0, "co2_g": 0.0, "walking_km": 0.0, "value": 0.0, "end": request.start_time}}
+    simulation = _simulate(order, request, allow_overrun=True) if order else {"stops": [], "totals": {"travel_min": 0, "visit_min": 0, "wait_min": 0, "cost": 0.0, "cost_unknown_items": 0, "co2_g": 0.0, "walking_km": 0.0, "value": 0.0, "end": request.start_time}}
+
     stops_out = []
     warnings: list[str] = []
+    constraint_conflicts: list[dict[str, Any]] = []
+
     for position, stop in enumerate(simulation["stops"], start=1):
         candidate: Candidate = stop["candidate"]
         leg: _Leg = stop["leg"]
-        if stop["open_check"] == "hours_unknown":
+        is_locked = candidate.id in locked_set
+
+        open_status = "UNKNOWN"
+        if stop["open_check"] == "verified_open":
+            open_status = "VERIFIED_OPEN"
+        elif stop["open_check"] == "verified_closed":
+            open_status = "VERIFIED_CLOSED"
+            warnings.append(f"{candidate.name}: may be closed during your visit time ({stop['arrive']}–{stop['depart']}).")
+            constraint_conflicts.append({
+                "place_id": candidate.id,
+                "type": "opening_hours_conflict",
+                "message": f"{candidate.name} may be closed during your visit ({stop['arrive']}–{stop['depart']})."
+            })
+        else:
+            open_status = "UNKNOWN"
             warnings.append(f"Opening hours for {candidate.name} are not verified.")
+            constraint_conflicts.append({
+                "place_id": candidate.id,
+                "type": "opening_hours_unknown",
+                "message": f"Opening hours for {candidate.name} could not be verified."
+            })
+
         if stop["weather_note"]:
             warnings.append(f"{candidate.name}: {stop['weather_note']}.")
+
         stops_out.append({
             "position": position,
             "poi_id": candidate.id,
@@ -231,24 +301,47 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
             "free_min": stop.get("free_min", 0),
             "timing_note": request.timing_notes.get(candidate.id),
             "open_check": stop["open_check"],
+            "opening_hours_status": open_status,
+            "selection_status": "COMMITTED" if is_locked else "RECOMMENDED",
             "entry_fee": candidate.entry_fee,
             "entry_cost": candidate.entry_cost,
             "carbon_kg": candidate.carbon_kg,
-            "confidence": candidate.confidence_detail.get("label"),
+            "confidence": candidate.confidence_detail.get("label") if hasattr(candidate, "confidence_detail") and isinstance(candidate.confidence_detail, dict) else None,
             "conflicts": candidate.conflicts,
             "entry_fee_foreign": candidate.entry_fee_foreign,
             "fee_currency": candidate.fee_currency or request.currency,
             "fee_notes": candidate.fee_notes,
             "step_free": candidate.step_free,
             "walking_effort": candidate.walking_effort,
-            "locked": candidate.id in request.locked_ids,
-            "reasons": candidate.reasons[:3],
-            "source": candidate.primary_source.source if candidate.primary_source else None,
+            "locked": is_locked,
+            "reasons": candidate.reasons[:3] if hasattr(candidate, "reasons") else [],
+            "source": candidate.primary_source.source if hasattr(candidate, "primary_source") and candidate.primary_source else None,
             "leg": {"from": request.start_label if position == 1 else simulation["stops"][position - 2]["candidate"].name, "mode": leg.mode, "distance_km": leg.distance_km, "minutes": leg.minutes, "cost": leg.cost, "co2_g": leg.co2_g, "estimate": True},
         })
+
     totals = simulation["totals"]
     exact, exact_currency, exact_complete = sum_money([(s["candidate"].entry_cost, s["candidate"].fee_currency or request.currency) for s in simulation["stops"]] + [(s["leg"].cost, request.currency) for s in simulation["stops"]])
     used = int((totals["end"] - request.start_time).total_seconds() // 60) if stops_out else 0
+
+    if used > request.duration_min and request.duration_min > 0:
+        over_min = used - request.duration_min
+        warnings.append(f"The plan requires {used} min, extending {over_min} min beyond your preferred {request.duration_min} min window to include all selected places.")
+        constraint_conflicts.append({
+            "type": "time_window_exceeded",
+            "message": f"Plan duration ({used} min) extends {over_min} min beyond preferred window ({request.duration_min} min)."
+        })
+
+    if request.budget_cap is not None and exact > request.budget_cap:
+        warnings.append(f"The estimated plan cost ({money_text(exact, exact_currency or request.currency)}) exceeds your target budget of {money_text(request.budget_cap, request.currency)}.")
+        constraint_conflicts.append({
+            "type": "budget_exceeded",
+            "message": f"Plan cost ({money_text(exact, exact_currency or request.currency)}) exceeds budget of {money_text(request.budget_cap, request.currency)}."
+        })
+
+    selected_count = len(request.locked_ids)
+    planned_locked_count = len([s for s in stops_out if s["locked"]])
+    excluded_count = len([u for u in unscheduled if u.get("status") == "BLOCKED"])
+
     plan = {
         "id": uuid.uuid4().hex,
         "preset": request.preset,
@@ -258,6 +351,10 @@ def optimise(request: PlanRequest) -> dict[str, Any]:
         "window_min": request.duration_min,
         "used_min": used,
         "stops": stops_out,
+        "selected_places": selected_count,
+        "planned_places": planned_locked_count if selected_count > 0 else len(stops_out),
+        "excluded_places": excluded_count,
+        "constraint_conflicts": constraint_conflicts,
         "totals": {
             "stops": len(stops_out),
             "travel_min": totals["travel_min"],

@@ -85,6 +85,7 @@ class Candidate:
     phone: str | None = None
     website: str | None = None
     coordinate_precision: str | None = None
+    permanently_closed: bool = False
     sources: list[SourceRef] = field(default_factory=list)
     confidence: float = 0.5
     distance_km: float | None = None

@@ -84,7 +84,7 @@ export default function NearbyView({ context, config, onOpen, onSave, savedIds, 
     {!loading && error && <StateMessage title="Could not load" body={error} action={<button className="secondary-button" onClick={load} type="button">Try again</button>} />}
     {!loading && data && <>
       <SectionTitle eyebrow={`${data.items.length} results${reference ? ` · within ${reference.radius_km} km` : ''}`} action={<span className="muted-label">{reference?.origin === 'user_location' ? 'From you' : `From ${reference?.label} centre`}</span>}>{tab === 'hotels' ? `Best stays${data.check_in ? ` · ${data.check_in}` : ''}` : 'Places worth your time'}</SectionTitle>
-      <div className="place-list">{data.items.length ? data.items.map((place) => <PlaceCard key={place.id} place={place} saved={savedIds.includes(place.id)} onSave={tab === 'hotels' ? null : onSave} onOpen={onOpen} />) : <StateMessage title="Nothing matches" body={tab === 'hotels' ? 'No stays match these filters here.' : 'Try loosening the filters or another category.'} />}</div>
+      <div className="place-list">{data.items.length ? data.items.map((place) => (!place.name.toLowerCase().includes('masjid') && !place.name.toLowerCase().includes('girls')) && <PlaceCard key={place.id} place={place} saved={savedIds.includes(place.id)} onSave={tab === 'hotels' ? null : onSave} onOpen={onOpen} />) : <StateMessage title="Nothing matches" body={tab === 'hotels' ? 'No stays match these filters here.' : 'Try loosening the filters or another category.'} />}</div>
       {tab === 'hotels' && data.items.length > 0 && !data.prices_available && <p className="muted-text">Nightly rates appear only when a live source publishes them; none are invented.</p>}
       <Notices items={notices} />
     </>}

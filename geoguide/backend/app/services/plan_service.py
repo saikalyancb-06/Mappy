@@ -286,7 +286,10 @@ def build_plan(
     plan["warnings"] = [*plan["warnings"], *[entry["note"] for entry in coverage if entry["status"] != "planned" and entry.get("note")]]
     missing = [i for i in user_locks if i not in planned]
     if missing:
-        plan["warnings"] = [*plan["warnings"], *[f"Couldn't fit {c.name} in this window (time, opening hours or budget)." for c in get_pois(missing)]]
+        blocked = {u["id"]: u.get("reason", "Cannot be visited") for u in plan.get("unscheduled", []) if u.get("status") == "BLOCKED"}
+        for c in get_pois(missing):
+            reason = blocked.get(c.id) or ("Permanently closed" if getattr(c, "permanently_closed", False) else "Data unavailable")
+            plan["warnings"].append(f"{c.name}: {reason}.")
     if trace:
         trace.step("itinerary", preset=plan["preset"], window_min=plan["window_min"], stops=[s["poi_id"] for s in plan["stops"]], totals=plan["totals"], unscheduled=len(plan["unscheduled"]), understood=understood)
     _persist(plan, user_id, reference.destination_id, start_time)
