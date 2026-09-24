@@ -129,3 +129,24 @@ def test_reverse_geocoded_alias_matches_the_stored_city(nominatim):
     city, _ = resolve_city(lat=CENTRE[0] + 0.23, lon=CENTRE[1])  # ~25 km north: outside the extent
     assert city.destination_id == "dest-test-blr" and city.resolved_by == "geocoder_match"
     assert calls[0]["accept-language"] == "en"
+
+
+def test_destination_picker_lists_closest_cities_first_and_matches_as_you_type():
+    from app.geo.geocoding import search_destinations
+
+    near_blr = [d["name"] for d in search_destinations(None, 5, near=WHITEFIELD)]
+    assert near_blr[0] == "Bengaluru"
+    assert [d["name"] for d in search_destinations("beng", 5)] == ["Bengaluru"]  # prefix while typing
+    assert [d["name"] for d in search_destinations("Bangalore", 5)][0] == "Bengaluru"  # alias
+    assert "Bengaluru" in [d["name"] for d in search_destinations("karnataka", 5)]  # state
+    assert search_destinations("be", 5, near=WHITEFIELD)[0]["distance_km"] is not None
+    assert "Testville" not in [d["name"] for d in search_destinations("ben", 5)]  # short queries don't fuzzy-match
+
+
+def test_destination_list_endpoint_accepts_the_traveller_position():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    items = TestClient(app).get("/api/destinations", params={"lat": WHITEFIELD[0], "lon": WHITEFIELD[1], "limit": 3}).json()["items"]
+    assert items[0]["name"] == "Bengaluru" and items[0]["distance_km"] < 20

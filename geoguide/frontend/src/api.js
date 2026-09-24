@@ -69,7 +69,12 @@ export const recordInteraction = (event) => request('/api/interactions', { metho
 // ---- configuration & destinations ----
 export const getConfig = () => request('/api/config')
 export const getHealth = () => request('/api/health')
-export const listDestinations = (q = '') => request(`/api/destinations${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+export const listDestinations = (q = '', near = null, limit = 8) => {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (q) params.set('q', q)
+  if (near) { params.set('lat', String(near.lat)); params.set('lon', String(near.lon)) }
+  return request(`/api/destinations?${params}`)
+}
 export const resolveDestination = (q) => request(`/api/destinations/resolve?q=${encodeURIComponent(q)}`)
 export const describeLocation = (userLocation) => request(`/api/location/describe${contextParams({ userLocation })}`)
 export const prefetchArea = (context) => request('/api/destinations/prefetch', { method: 'POST', body: JSON.stringify({ ...(context.userLocation || {}), destination_id: context.destination?.destination_id, name: context.destination?.destination_id ? null : context.destination?.name }) })

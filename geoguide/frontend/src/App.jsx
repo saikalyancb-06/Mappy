@@ -116,13 +116,16 @@ function App() {
   const context = useMemo(() => ({ userLocation: stableLocation, destination }), [stableLocation, destination])
 
   // Which city the device is in (shown in the context bar; lets the traveller switch to it).
-  const [here, setHere] = useState(null)
+  const [hereState, setHereState] = useState({ location: null, city: null })
   useEffect(() => {
     if (!stableLocation) return undefined
     let cancelled = false
-    describeLocation(stableLocation).then((result) => { if (!cancelled) setHere(result.city || null) }).catch(() => { if (!cancelled) setHere(null) })
+    describeLocation(stableLocation)
+      .then((result) => { if (!cancelled) setHereState({ location: stableLocation, city: result.city || null }) })
+      .catch(() => { if (!cancelled) setHereState({ location: stableLocation, city: null }) })
     return () => { cancelled = true }
   }, [stableLocation])
+  const here = stableLocation && hereState.location === stableLocation ? hereState.city : null
 
   // Warm stores for a non-curated destination (OpenStreetMap + weather) and show progress.
   useEffect(() => {
@@ -141,6 +144,25 @@ function App() {
   }, [])
 
   const clearDestination = () => { setDestination(null); writeJson(DESTINATION_KEY, null) }
+
+  // "Use my current location" on the start screen: explore the city the device is in.
+  // A stored city becomes the destination; anywhere else, GeoGuide works from the GPS point itself.
+  const [wantHere, setWantHere] = useState(false)
+  const useMyLocation = () => { setWantHere(true); if (!device.location) device.start() }
+  useEffect(() => {
+    if (!wantHere || !stableLocation || hereState.location !== stableLocation) return undefined
+    const timer = window.setTimeout(() => {
+      setWantHere(false)
+      if (hereState.city?.destination_id) chooseDestination(hereState.city)
+      else { setDestination(null); writeJson(DESTINATION_KEY, null); setChoosingStart(false) }
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [wantHere, stableLocation, hereState, chooseDestination])
+  useEffect(() => {
+    if (!wantHere || !['denied', 'unavailable', 'unsupported'].includes(device.status)) return undefined
+    const timer = window.setTimeout(() => setWantHere(false), 0)
+    return () => window.clearTimeout(timer)
+  }, [wantHere, device.status])
 
   const completeOnboarding = (chosen) => {
     const interests = Object.fromEntries(chosen.map((interest) => [interest, 1]))
@@ -182,7 +204,7 @@ function App() {
   if (!user) return <AuthView onAuthenticated={setUser} />
   if (!onboarded) return <Onboarding config={config} onComplete={completeOnboarding} />
   if (choosingStart || (!destination && !stableLocation)) {
-    return <StartView device={device} onLocate={device.start} onChooseDestination={chooseDestination} canContinue={Boolean(destination || stableLocation)} onContinue={() => setChoosingStart(false)} onCancel={destination || stableLocation ? () => setChoosingStart(false) : null} />
+    return <StartView device={device} here={here} locating={wantHere} onUseLocation={useMyLocation} onChooseDestination={chooseDestination} canContinue={Boolean(destination || stableLocation)} onContinue={() => setChoosingStart(false)} onCancel={destination || stableLocation ? () => setChoosingStart(false) : null} />
   }
 
   const openPlace = (place) => setSelectedPlace(place)

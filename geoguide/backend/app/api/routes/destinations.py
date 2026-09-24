@@ -9,6 +9,7 @@ from app.api.common import destination_from_params, geo_for, location_from_param
 from app.db.models import IngestionJob, utcnow
 from app.db.session import SessionLocal
 from app.geo.city import resolve_city
+from app.geo.distance import valid_coordinates
 from app.geo.geo_context import parse_user_location
 from app.geo.geocoding import reverse_geocode, resolve_place, search_destinations
 from app.ingestion.overpass import fetch_and_store
@@ -19,8 +20,9 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/destinations")
-def list_destinations(q: str | None = None, limit: int = Query(10, ge=1, le=50)) -> dict:
-    return {"items": search_destinations(q, limit)}
+def list_destinations(q: str | None = None, limit: int = Query(10, ge=1, le=50), lat: float | None = None, lon: float | None = None) -> dict:
+    near = (lat, lon) if lat is not None and lon is not None and valid_coordinates(lat, lon) else None
+    return {"items": search_destinations(q, limit, near=near)}
 
 
 @router.get("/destinations/resolve")
