@@ -1,0 +1,43 @@
+{
+  "_comment": "City-and-date event rules. Events are scoped to a city and a date range, never to a radius. Keywords classify stored and live listings; nothing here names a specific city.",
+  "groups": {
+    "festival": {"label": "Festivals", "order": 1},
+    "music": {"label": "Music", "order": 2},
+    "culture": {"label": "Culture", "order": 3},
+    "arts": {"label": "Arts", "order": 4},
+    "sports": {"label": "Sports", "order": 5},
+    "food": {"label": "Food", "order": 6},
+    "family": {"label": "Family", "order": 7},
+    "markets": {"label": "Markets & fairs", "order": 8},
+    "outdoors": {"label": "Outdoors", "order": 9},
+    "nightlife": {"label": "Nightlife", "order": 10},
+    "other": {"label": "Other", "order": 11}
+  },
+  "festival_keywords": ["festival of lights", "deepavali", "diwali", "dasara", "dussehra", "navaratri", "navratri", "durga puja", "ganesh", "ganesha chaturthi", "vinayaka", "pongal", "sankranti", "onam", "holi", "eid", "ramadan", "christmas", "easter", "ugadi", "gudi padwa", "karaga", "utsav", "utsava", "rathotsava", "rath yatra", "car festival", "temple festival", "jatre", "jatra", "harvest", "kite festival", "boat race", "lohri", "baisakhi", "bihu", "chhath", "janmashtami", "shivaratri", "vesak", "songkran", "loy krathong", "chinese new year", "lunar new year", "thaipusam", "diwali mela"],
+  "category_keywords": {
+    "music": ["music", "concert", "gig", "live band", "orchestra", "symphony", "jazz", "rock", "carnatic", "hindustani", "dj", "sufi", "qawwali"],
+    "arts": ["film", "cinema", "art", "exhibition", "gallery", "craft", "literature", "literary", "book", "photography", "biennale", "design week"],
+    "culture": ["heritage", "dance", "theatre", "theater", "drama", "performance", "cultural", "walk", "storytelling", "comedy", "stand-up", "standup", "poetry"],
+    "sports": ["marathon", "race", "run", "cricket", "football", "match", "tournament", "cup", "league", "cycling", "triathlon", "yoga day"],
+    "food": ["food", "culinary", "street food", "beer", "wine", "coffee", "tasting"],
+    "family": ["kids", "children", "family", "science", "zoo", "puppet"],
+    "markets": ["fair", "mela", "market", "bazaar", "flea", "expo", "haat"],
+    "outdoors": ["trek", "hike", "birding", "nature", "outdoor", "camp"],
+    "nightlife": ["night", "party", "club", "nightlife"],
+    "festival": ["festival"]
+  },
+  "dataset_category_map": {"food": "food", "heritage": "culture", "nature": "outdoors", "nightlife": "nightlife", "shopping": "markets"},
+  "crowd_footfall_high": 100000,
+  "live": {
+    "enabled": true,
+    "cache_ttl_s": 21600,
+    "max_results": 12,
+    "query_templates": ["events in {city} {date_phrase}"],
+    "source_confidence": 0.7
+  },
+  "ranges": {
+    "day": 0,
+    "weekend": "sat-sun",
+    "week": 6
+  }
+}

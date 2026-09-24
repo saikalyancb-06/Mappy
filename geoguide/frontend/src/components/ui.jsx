@@ -6,7 +6,9 @@ import {
   Clock,
   Compass,
   Home,
+  CalendarDays,
   Info,
+  Lightbulb,
   MapPin,
   MessageCircle,
   Navigation,
@@ -18,10 +20,10 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-react'
-import { formatDistance, formatMinutes, openLabel, titleCase } from '../format'
+import { formatDay, formatDistance, formatMinutes, formatMoney, openLabel, titleCase } from '../format'
 
 const tabs = [
-  { id: 'now', label: 'Now', Icon: Home },
+  { id: 'now', label: 'Explore', Icon: Home },
   { id: 'nearby', label: 'Nearby', Icon: Compass },
   { id: 'plan', label: 'Plan', Icon: Route },
   { id: 'ask', label: 'Ask', Icon: MessageCircle },
@@ -151,4 +153,34 @@ export function AdvisoryList({ advisories }) {
     <AlertTriangle size={16} />
     <div><strong>{item.title}</strong><span className="advisory-meta">{SEVERITY[item.severity] || item.severity} · {item.kind === 'weather_derived' ? 'from forecast' : item.issuing_body || item.source}{item.valid_to ? ` · until ${item.valid_to.slice(0, 10)}` : ''}{item.language && !item.language.startsWith('en') ? ` · in ${item.language}` : ''}</span>{item.body && <p>{item.body}</p>}</div>
   </div>)}</div>
+}
+
+// ---- events & tips ---------------------------------------------------------
+
+const eventDates = (event) => (event.start_date === event.end_date ? formatDay(event.start_date) : `${formatDay(event.start_date, false)} → ${formatDay(event.end_date)}`)
+
+export function EventCard({ event }) {
+  const source = event.source || {}
+  const start = event.start_date ? new Date(`${event.start_date}T12:00:00`) : null
+  const verified = source.last_verified_at ? formatDay(source.last_verified_at.slice(0, 10)) : null
+  const ticket = event.is_ticketed ? (event.ticket_price ? `Ticketed · from ${formatMoney(event.ticket_price, event.currency)}` : 'Ticketed') : event.is_ticketed === false ? 'Free entry' : null
+  return <article className={`event-card ${event.type === 'festival' ? 'festival' : ''}`}>
+    <div className="event-date" aria-hidden="true">{start && <><strong>{start.getDate()}</strong><span>{start.toLocaleDateString('en-GB', { month: 'short' })}</span></>}</div>
+    <div className="event-body">
+      <span className="category-label">{event.group_label}{event.type === 'festival' && event.category !== 'festival' ? ' · festival' : ''}{event.multi_day ? ' · multi-day' : ''}</span>
+      <h3>{event.name}</h3>
+      <p className="event-meta"><CalendarDays size={13} /> {event.timing === 'usually_this_time_of_year' ? 'Usually around this time — dates not confirmed' : eventDates(event)}{event.venue?.name ? ` · ${event.venue.name}` : ''}{event.distance_km != null ? ` · ${formatDistance(event.distance_km)} from you` : ''}</p>
+      {event.description && <p>{event.description}</p>}
+      {event.significance && <p><strong>Why it matters:</strong> {event.significance}</p>}
+      {event.traditions && <p><strong>Traditions:</strong> {event.traditions}</p>}
+      {event.etiquette && <p><strong>Etiquette:</strong> {event.etiquette}</p>}
+      {(ticket || event.crowded) && <p className="event-meta"><Ticket size={13} /> {[ticket, event.crowded ? 'Large crowds expected' : null].filter(Boolean).join(' · ')}</p>}
+      <small className="event-source">Source: {source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer">{source.name || 'listing'}</a> : (source.name || 'stored record')}{verified ? ` · verified ${verified}` : ''}</small>
+    </div>
+  </article>
+}
+
+export function TipList({ tips }) {
+  if (!tips?.length) return <p className="muted-text">No tips for this date from the available data.</p>
+  return <ul className="tip-list">{tips.map((tip) => <li key={tip.id} className={`tip-${tip.kind}`}><Lightbulb size={15} /><div><p>{tip.text}</p><small>Based on: {tip.basis}</small></div></li>)}</ul>
 }

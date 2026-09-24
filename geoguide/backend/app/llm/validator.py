@@ -55,6 +55,27 @@ def _numbers(evidence: list[Evidence]) -> tuple[str, set[float], set[float], set
     return text, ratings, distances, temps
 
 
+# Proper names of festivals that stand alone ("Diwali"), and words that make a Title-Case phrase an event name ("Kite Festival").
+_FESTIVAL_NAMES = r"Diwali|Deepavali|Dasara|Dussehra|Navaratri|Navratri|Holi|Onam|Pongal|Sankranti|Ugadi|Karaga|Rathotsava|Christmas|Easter|Eid|Durga\s+Puja|Ganesh(?:a)?\s+Chaturthi|Vinayaka\s+Chaturthi|Janmashtami|Shivaratri|Bihu|Baisakhi|Lohri|Chhath|Vesak|Songkran|Thaipusam|Festival\\s+of\\s+[A-Z]\\w+"
+_EVENT_WORDS = r"Festival|Fest|Utsav|Utsava|Mela|Fair|Carnival|Concert|Marathon|Expo|Exhibition|Jatre|Jatra|Parade|Puja|Pooja|Biennale|Week|Nights|Race|Show|Tournament|Cup"
+_TITLE = r"[A-Z][\w'’&.-]*"
+_EVENT_PHRASE = re.compile(rf"\b((?:{_TITLE}\s+(?:(?:of|at|the|and|&|de|la|du)\s+)?){{1,5}}(?:{_EVENT_WORDS})\b(?:\s+\d{{4}})?)|\b({_FESTIVAL_NAMES})\b")
+_SENTENCE_START_NOISE = {"the", "a", "an", "no", "this", "that", "any", "our", "your", "there"}
+
+
+def _event_names(answer: str) -> list[str]:
+    """Event and festival names the answer mentions (Title-Case phrases ending in an event word, or a festival's own name)."""
+    names = []
+    for match in _EVENT_PHRASE.finditer(re.sub(r"\*\*|\[E\d+\]", "", answer)):
+        phrase = (match.group(1) or match.group(2) or "").strip()
+        words = phrase.split()
+        while words and words[0].lower() in _SENTENCE_START_NOISE:
+            words = words[1:]
+        if len(words) >= 2 or (match.group(2) and words):
+            names.append(" ".join(words))
+    return names
+
+
 def validate(answer: str, evidence: list[Evidence], *, known_names: list[str] | None = None) -> ValidationResult:
     result = ValidationResult(status="ok")
     ids = {item.id for item in evidence}
@@ -93,6 +114,10 @@ def validate(answer: str, evidence: list[Evidence], *, known_names: list[str] | 
             result.issues.append({"type": "invented_temperature", "detail": f"temperature {value}° is not in the evidence"})
     if re.search(r"\bopen (?:right )?now\b", answer, re.IGNORECASE) and not any(e.metadata.get("open_status") == "open" for e in evidence):
         result.issues.append({"type": "invented_open_status", "detail": "no evidence says a place is open now"})
+
+    for phrase in _event_names(answer):
+        if normalize(phrase) not in normalize(text):
+            result.issues.append({"type": "invented_event", "detail": f"event '{phrase}' is not in the evidence"})
 
     sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", answer) if len(normalize(s).split()) >= 6]
     result.sentences = len(sentences)

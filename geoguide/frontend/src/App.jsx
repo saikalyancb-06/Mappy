@@ -6,7 +6,7 @@ import { BottomTabBar, Chip, StateMessage } from './components/ui'
 import { useDeviceLocation } from './hooks/useDeviceLocation'
 import AskView from './views/AskView'
 import NearbyView from './views/NearbyView'
-import NowView from './views/NowView'
+import ExploreView from './views/ExploreView'
 import PlaceDetailView from './views/PlaceDetailView'
 import PlanView from './views/PlanView'
 import ProfileView from './views/ProfileView'
@@ -82,6 +82,7 @@ function App() {
   const [selectedPlace, setSelectedPlace] = useState(null)
   const [askPlace, setAskPlace] = useState(null)
   const [savedIds, setSavedIds] = useState(() => readJson(SAVED_KEY, []))
+  const [selectedDate, setSelectedDate] = useState(null) // null = the city's today; set by the Explore date picker
   const [prefetch, setPrefetch] = useState(null)
   const [debugAvailable, setDebugAvailable] = useState(false)
   const device = useDeviceLocation()
@@ -176,12 +177,11 @@ function App() {
   }
 
   const openPlace = (place) => setSelectedPlace(place)
-  const interestGroups = (config?.groups || []).filter((group) => Object.keys(preferences.interests || {}).includes(group.id))
   const views = {
-    now: <NowView onChooseDestination={chooseDestination} context={context} language={preferences.language} interests={interestGroups.length ? interestGroups : (config?.groups || []).slice(0, 3)} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} userName={user?.name} />,
+    now: <ExploreView context={context} language={preferences.language} selectedDate={selectedDate} onDateChange={setSelectedDate} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onAsk={() => setActiveTab('ask')} onGoNearby={() => setActiveTab('nearby')} onChooseDestination={chooseDestination} />,
     nearby: <NearbyView context={context} config={config} onOpen={openPlace} onSave={toggleSaved} savedIds={savedIds} onEnableLocation={device.start} onChooseDestination={chooseDestination} hasBudget={Boolean(preferences.max_daily_budget)} />,
     plan: <PlanView context={context} config={config} savedIds={savedIds} onToggleSaved={toggleSaved} onOpen={openPlace} onEnableLocation={device.start} profile={preferences} />,
-    ask: <AskView context={context} language={preferences.language} selectedPlace={askPlace} onClearSelected={() => setAskPlace(null)} onAdoptDestination={chooseDestination} onOpen={openPlace} debugAvailable={debugAvailable} />,
+    ask: <AskView context={context} selectedDate={selectedDate} onClearDate={() => setSelectedDate(null)} language={preferences.language} selectedPlace={askPlace} onClearSelected={() => setAskPlace(null)} onAdoptDestination={chooseDestination} onOpen={openPlace} debugAvailable={debugAvailable} />,
     profile: <ProfileView key={JSON.stringify(preferences)} user={user} config={config} preferences={preferences} onSave={savePreferences} onLogout={logout} />,
   }
 

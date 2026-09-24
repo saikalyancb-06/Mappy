@@ -290,3 +290,54 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .compare-table th, .compare-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 .compare-table th { color: var(--forest); font-size: 11px; }
 .compare-table td:first-child { color: var(--muted); font-weight: 700; }
+
+/* ---- Explore: city + date ---- */
+.explore-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.explore-header h1 { font-size: clamp(30px, 9vw, 40px); overflow-wrap: anywhere; margin-top: 4px; }
+.explore-header .muted-text { margin-top: 6px; }
+.date-bar-wrap { display: grid; gap: 10px; }
+.date-bar { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.date-bar > button { height: 44px; border-radius: 14px; background: var(--white-glass); color: var(--forest); display: grid; place-items: center; box-shadow: var(--shadow); }
+.date-field { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; background: var(--forest); color: white; min-width: 0; }
+.date-field input { flex: 1; min-width: 0; background: transparent; border: 0; color: white; font: inherit; font-weight: 800; color-scheme: dark; }
+.mode-row { padding-bottom: 2px; }
+.is-stale { opacity: .6; }
+.listen-button { justify-self: start; display: inline-flex; align-items: center; gap: 6px; }
+.event-list { display: grid; gap: 10px; }
+.event-card { display: grid; grid-template-columns: 52px 1fr; gap: 12px; padding: 14px; border-radius: 22px; background: var(--white-glass); box-shadow: var(--shadow); border-left: 4px solid #7aa6d6; }
+.event-card.festival { border-left-color: var(--lime); }
+.event-date { display: grid; place-items: center; align-content: center; height: 56px; border-radius: 16px; background: var(--forest); color: white; }
+.event-date strong { font-size: 20px; line-height: 1; }
+.event-date span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.event-body { display: grid; gap: 5px; min-width: 0; }
+.event-body p { font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.event-meta { display: block; color: var(--muted) !important; font-size: 13px !important; }
+.event-meta svg { vertical-align: -2px; margin-right: 4px; }
+.event-source { color: var(--muted); font-size: 12px; }
+.event-source a { color: var(--forest); font-weight: 700; }
+.event-group { display: grid; gap: 10px; }
+.empty-events { padding: 16px; border-radius: 20px; background: rgba(255,255,255,.55); border: 1px dashed rgba(14,42,26,.25); display: grid; gap: 4px; }
+.empty-events strong { color: var(--forest); }
+.empty-events p { color: var(--muted); font-size: 14px; }
+.weather-card { display: grid; gap: 6px; padding: 18px; border-radius: 24px; background: var(--forest); color: white; }
+.weather-card .eyebrow { color: rgba(255,255,255,.7); }
+.weather-card.unavailable { background: var(--white-glass); color: var(--ink); }
+.weather-card.unavailable .eyebrow { color: var(--muted); }
+.weather-main { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.weather-main strong { font-size: 30px; }
+.weather-card p { color: rgba(255,255,255,.85); font-size: 14px; }
+.basis-pill { justify-self: start; padding: 4px 10px; border-radius: 999px; background: var(--lime); color: var(--forest); font-size: 12px; font-weight: 800; }
+.basis-pill.basis-typical, .basis-pill.basis-dataset { background: #f3d98b; }
+.tip-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tip-list li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--white-glass); }
+.tip-list li svg { color: var(--forest); margin-top: 2px; }
+.tip-list p { font-size: 14px; }
+.tip-list small { color: var(--muted); font-size: 12px; }
+.knowledge-card { display: grid; gap: 8px; padding: 16px; border-radius: 22px; background: var(--white-glass); box-shadow: var(--shadow); }
+.knowledge-card p { font-size: 15px; line-height: 1.5; }
+.knowledge-card small { color: var(--muted); font-size: 12px; }
+.shortcut-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.shortcut-row button { display: grid; justify-items: center; gap: 6px; padding: 12px 4px; border-radius: 18px; background: var(--white-glass); color: var(--forest); font-weight: 800; font-size: 12px; }
+.sources-checked { color: var(--muted); font-size: 13px; }
+.sources-checked ul { margin: 6px 0 0; padding-left: 18px; }
+.ask-events { display: grid; gap: 10px; margin-top: 8px; }

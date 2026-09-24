@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 from app.config import PS13_DB_PATH
 from app.core.rules import load_rules, taxonomy
 from app.core.text import name_similarity, normalize
+from app.events.store import classify as classify_event
 from app.db.models import DataSource, Destination, EntityAlias, EventFestival, KnowledgeChunk, Poi, SafetyAdvisory, WeatherDaily, utcnow
 from app.db.session import SessionLocal, init_db
 from app.geo.distance import haversine_km, valid_coordinates
@@ -99,7 +100,9 @@ def import_ps13(db_path: Path | str | None = None) -> dict[str, int]:
         # ---- cities → destinations (attach to curated destinations when they are the same place)
         city_to_destination: dict[str, str] = {}
         spread: dict[str, float] = {}
+        countries = {row["country_id"]: row for row in rows("SELECT * FROM countries")}
         for city in rows("SELECT * FROM cities WHERE status = 'active'"):
+            country = countries.get(city["country_id"])
             lat, lon = float(city["lat"]), float(city["lng"])
             existing = _match_destination(db, city["name"], lat, lon, mapping["merge_destination"])
             if existing:
@@ -109,7 +112,8 @@ def import_ps13(db_path: Path | str | None = None) -> dict[str, int]:
                 existing.season_profile = existing.season_profile or city["season_profile"]
                 continue
             db.merge(Destination(
-                id=city["city_id"], name=city["name"], region=city["state"], country=None, country_code=city["country_code"],
+                id=city["city_id"], name=city["name"], region=city["state"], country=country["name"] if country else None, country_code=city["country_code"],
+                currency=country["default_currency"] if country else None,
                 lat=lat, lon=lon, coverage_radius_km=float(mapping["coverage_radius_km"]["min"]), timezone=city["timezone"],
                 languages=json.dumps([city["primary_language"]]), summary=city["description"], population=city["population"],
                 peak_months=json.dumps([int(m) for m in city["peak_months"].split(",") if m.strip().isdigit()]), season_profile=city["season_profile"],
@@ -202,11 +206,19 @@ def import_ps13(db_path: Path | str | None = None) -> dict[str, int]:
             counts["advisories"] += 1
 
         # ---- events
+        event_categories = {r["category_id"]: r["code"] for r in rows("SELECT category_id, code FROM categories")}
         for row in rows("SELECT * FROM events_festivals WHERE status = 'active'"):
             destination_id = city_to_destination.get(row["city_id"])
             if not destination_id:
                 continue
-            db.merge(EventFestival(id=row["event_id"], destination_id=destination_id, title=row["name"], summary=row["description"], start_date=row["start_date"], end_date=row["end_date"], recurrence=row["recurrence"], is_ticketed=bool(row["is_ticketed"]), ticket_price=_decimal_text(row["ticket_price"]), currency=row["currency"], venue_lat=float(row["venue_lat"]) if row["venue_lat"] is not None else None, venue_lon=float(row["venue_lng"]) if row["venue_lng"] is not None else None, source=source_label, data_source_id=source_id, confidence=confidence, updated_at=utcnow()))
+            event_type, event_category = classify_event(row["name"], row["description"], event_categories.get(row["category_id"]), recurring=row["recurrence"] in {"annual", "biennial"})
+            db.merge(EventFestival(
+                id=row["event_id"], destination_id=destination_id, title=row["name"], summary=row["description"], start_date=row["start_date"], end_date=row["end_date"],
+                recurrence=row["recurrence"], is_ticketed=bool(row["is_ticketed"]), ticket_price=_decimal_text(row["ticket_price"]), currency=row["currency"],
+                venue_lat=float(row["venue_lat"]) if row["venue_lat"] is not None else None, venue_lon=float(row["venue_lng"]) if row["venue_lng"] is not None else None,
+                source=source_label, data_source_id=source_id, confidence=confidence, updated_at=utcnow(),
+                event_type=event_type, category=event_category, season=row["season"], expected_footfall=row["expected_footfall"], status=row["status"], last_verified_at=row["updated_at"],
+            ))
             counts["events"] += 1
 
         # ---- daily weather (fallback when live weather is unavailable)

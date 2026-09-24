@@ -147,21 +147,50 @@ class EvidenceBuilder:
         if current:
             parts.append(f"Now in {place_label}: {current['summary']}, {current['temperature_c']}°C (feels like {current['apparent_c']}°C), humidity {current['humidity_pct']}%")
         day = weather.get("day")
-        if day and weather.get("live") is False:
+        basis = weather.get("basis")
+        if day and basis == "typical":
+            parts.append(f"Typical weather for {day['date']} (average of {', '.join(str(y) for y in day.get('years') or [])} records; NOT a forecast): {day['temp_min_c']}–{day['temp_max_c']}°C, feels like up to {day['apparent_max_c']}°C, average precipitation {day['precipitation_mm']} mm; {day['summary'].lower()}")
+        elif day and basis == "observed":
+            parts.append(f"Recorded weather for {day['date']}: {day['summary']}, {day['temp_min_c']}–{day['temp_max_c']}°C, feels like up to {day['apparent_max_c']}°C, precipitation {day['precipitation_mm']} mm")
+        elif day and weather.get("live") is False:
             parts.append(f"Dataset daily weather record for {day['date']} (not a live forecast): {day['summary']}, {day['temp_min_c']}–{day['temp_max_c']}°C, feels like {day['apparent_max_c']}°C, precipitation {day['precipitation_mm']} mm, humidity {day.get('humidity_pct')}%")
         elif day:
             parts.append(f"Forecast for {day['date']}: {day['summary']}, {day['temp_min_c']}–{day['temp_max_c']}°C, feels like up to {day['apparent_max_c']}°C, precipitation chance up to {day['precipitation_probability_max']}%, UV index {day['uv_index_max']}, sunrise {str(day['sunrise'])[-5:]}, sunset {str(day['sunset'])[-5:]}")
         if weather.get("daylight_left_min") is not None:
             parts.append(f"Daylight left today: {weather['daylight_left_min'] // 60} h {weather['daylight_left_min'] % 60} min")
-        return self.add("weather", f"Weather for {place_label}", ". ".join(parts), source="Open-Meteo" if weather.get("live", True) else "Dataset weather_daily (not live)", source_url=weather.get("source_url"), retrieved_at=weather.get("retrieved_at"), confidence=0.9, metadata={"signals": weather.get("signals"), "day": day, "current": current})
+        return self.add("weather", f"Weather for {place_label}", ". ".join(parts), source={"typical": "Open-Meteo historical records", "observed": "Open-Meteo (recorded)"}.get(basis or "", "Open-Meteo" if weather.get("live", True) else "Dataset weather_daily (not live)"), source_url=weather.get("source_url"), retrieved_at=weather.get("retrieved_at"), confidence=0.9, metadata={"signals": weather.get("signals"), "day": day, "current": current})
 
     def add_advisory(self, advisory: dict[str, Any]) -> Evidence:
         label = "Forecast-derived notice" if advisory.get("kind") == "weather_derived" else "Safety advisory"
         return self.add("safety", advisory["title"], f"{label} (severity: {advisory['severity']}): {advisory.get('body') or advisory['title']}", source=advisory.get("source"), source_url=advisory.get("source_url"), source_id=advisory.get("id"), confidence=0.9, metadata={"severity": advisory["severity"], "kind": advisory.get("kind"), "body": advisory.get("body")})
 
     def add_event(self, event: dict[str, Any]) -> Evidence:
-        timing = {"dated": f"{event.get('start_date')} to {event.get('end_date') or event.get('start_date')}", "usually_this_time_of_year": "usually held around this time of year; exact dates vary", "dates_vary": "dates vary each year", "other_season": "held in another season"}.get(event.get("timing"), "")
-        return self.add("event", event["title"], f"{event['title']}: {event.get('summary') or ''} Timing: {timing}.".strip(), source=event.get("source"), source_url=event.get("source_url"), source_id=event.get("id"), confidence=event.get("confidence"))
+        name = event.get("name") or event["title"]
+        timing = {"dated": f"{event.get('start_date')} to {event.get('end_date') or event.get('start_date')}", "usually_this_time_of_year": "usually held around this time of year; dates for this year are NOT confirmed", "associated": "no confirmed dates", "dates_vary": "dates vary each year", "other_season": "held in another season"}.get(event.get("timing"), "")
+        parts = [f"{name}: {event.get('description') or event.get('summary') or ''}".strip(), f"Dates: {timing}."]
+        if event.get("type"):
+            parts.append(f"Type: {'recurring/cultural festival' if event['type'] == 'festival' else 'event'} ({event.get('group_label') or event.get('category')}).")
+        venue = event.get("venue") or {}
+        if venue.get("name"):
+            parts.append(f"Venue: {venue['name']}.")
+        if event.get("distance_km") is not None:
+            parts.append(f"About {event['distance_km']} km from the traveller.")
+        if event.get("is_ticketed"):
+            parts.append("Ticketed" + (f", from {_money(event.get('ticket_price'), event.get('currency'))}" if event.get("ticket_price") else "") + ".")
+        for label, key in (("Significance", "significance"), ("Traditions", "traditions"), ("Etiquette", "etiquette")):
+            if event.get(key):
+                parts.append(f"{label}: {event[key]}")
+        source = event.get("source")
+        source_name = source.get("name") if isinstance(source, dict) else source
+        source_url = source.get("url") if isinstance(source, dict) else event.get("source_url")
+        verified = source.get("last_verified_at") if isinstance(source, dict) else None
+        return self.add("event", name, " ".join(parts), source=source_name, source_url=source_url, source_id=event.get("id"), confidence=event.get("confidence"), retrieved_at=verified)
+
+    def add_event_status(self, city_name: str, window_label: str, count: int, sources: list[str]) -> Evidence:
+        """The explicit result of the event search, so an empty result reaches the model as 'None'."""
+        content = (f"VERIFIED EVENTS for {city_name} on {window_label}: None. No verified events were found in the sources checked ({', '.join(sources)}). Do not mention or suggest any event or festival."
+                   if count == 0 else f"VERIFIED EVENTS for {city_name} on {window_label}: {count} listed in this evidence; mention no others.")
+        return self.add("event_status", f"Events in {city_name}", content, source="GeoGuide event search", metadata={"count": count})
 
     def add_web(self, item: dict[str, Any]) -> Evidence:
         return self.add("web", item["title"], item.get("snippet") or item["title"], source=item.get("source_domain"), source_url=item.get("url"), retrieved_at=item.get("retrieved_at"), confidence=item.get("confidence"), metadata={"published": item.get("published"), "engine": item.get("engine")})
