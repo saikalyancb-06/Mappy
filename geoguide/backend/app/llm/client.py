@@ -10,7 +10,7 @@ from app.config import GROQ_API_KEY, GROQ_BASE_URL, GROQ_MODEL_FAST
 
 class LLMClient:
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
-        self.api_key = api_key or GROQ_API_KEY
+        self.api_key = GROQ_API_KEY if api_key is None else api_key
         self.base_url = (base_url or GROQ_BASE_URL).rstrip('/')
 
     def _headers(self) -> dict[str, str]:

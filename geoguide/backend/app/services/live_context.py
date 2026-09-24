@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import monotonic
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
 
@@ -10,14 +11,15 @@ from app.ingestion.overpass import build_overpass_query, normalize_overpass_resp
 from app.ingestion.weather import fetch_weather
 from app.services.route_service import RouteService
 
-_DEFAULT_LOCATION = {'lat': 12.9716, 'lon': 77.5946, 'city': 'Current area'}
+
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_TTL_SECONDS = 300
+_PROVIDER_TIMEOUT_SECONDS = 2.5
 _ROUTE = RouteService()
 
 
-def _cache_key(lat: float, lon: float, radius_km: float) -> str:
-    return f'{lat:.4f}:{lon:.4f}:{radius_km:.1f}'
+def _cache_key(lat: float, lon: float, radius_km: float, include_places: bool) -> str:
+    return f'{lat:.4f}:{lon:.4f}:{radius_km:.1f}:{include_places}'
 
 
 def _get_json(client: httpx.Client, url: str, **params: Any) -> Any:
@@ -35,8 +37,8 @@ def _weather_summary(weather: dict[str, Any]) -> str:
     return f'{temperature:.0f} C, {label}' if isinstance(temperature, (int, float)) else label
 
 
-def get_live_context(lat: float, lon: float, city: str | None = None, radius_km: float = 2.0) -> dict[str, Any]:
-    key = _cache_key(lat, lon, radius_km)
+def get_live_context(lat: float, lon: float, city: str | None = None, radius_km: float = 2.0, include_places: bool = True) -> dict[str, Any]:
+    key = _cache_key(lat, lon, radius_km, include_places)
     cached = _CACHE.get(key)
     if cached and monotonic() - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
@@ -47,35 +49,45 @@ def get_live_context(lat: float, lon: float, city: str | None = None, radius_km:
     resolved: dict[str, Any] = {}
     provider_errors: list[str] = []
 
-    try:
-        with httpx.Client(timeout=4.0, headers={'User-Agent': 'GeoGuide/0.1 local place companion'}) as client:
-            try:
-                resolved = reverse_geocode(_get_json(client, 'https://nominatim.openstreetmap.org/reverse', lat=lat, lon=lon, format='jsonv2', zoom=14))
-            except (httpx.HTTPError, ValueError) as exc:
-                provider_errors.append(f'geocode: {type(exc).__name__}')
+    def fetch_geocode() -> dict[str, Any]:
+        with httpx.Client(timeout=_PROVIDER_TIMEOUT_SECONDS, headers={'User-Agent': 'GeoGuide/0.1 local place companion'}) as client:
+            return reverse_geocode(_get_json(client, 'https://nominatim.openstreetmap.org/reverse', lat=lat, lon=lon, format='jsonv2', zoom=14))
 
-            try:
-                weather = fetch_weather(_get_json(
-                    client,
-                    'https://api.open-meteo.com/v1/forecast',
-                    latitude=lat,
-                    longitude=lon,
-                    current='temperature_2m,apparent_temperature,weather_code',
-                    hourly='temperature_2m,precipitation_probability',
-                    daily='temperature_2m_max,temperature_2m_min,sunrise,sunset',
-                    timezone='auto',
-                    forecast_days=1,
-                ))
-            except (httpx.HTTPError, ValueError) as exc:
-                provider_errors.append(f'weather: {type(exc).__name__}')
+    def fetch_weather_context() -> dict[str, Any]:
+        with httpx.Client(timeout=_PROVIDER_TIMEOUT_SECONDS, headers={'User-Agent': 'GeoGuide/0.1 local place companion'}) as client:
+            return fetch_weather(_get_json(
+                client,
+                'https://api.open-meteo.com/v1/forecast',
+                latitude=lat,
+                longitude=lon,
+                current='temperature_2m,apparent_temperature,weather_code',
+                hourly='temperature_2m,precipitation_probability',
+                daily='temperature_2m_max,temperature_2m_min,sunrise,sunset',
+                timezone='auto',
+                forecast_days=1,
+            ))
 
+    def fetch_places() -> list[dict[str, Any]]:
+        with httpx.Client(timeout=_PROVIDER_TIMEOUT_SECONDS, headers={'User-Agent': 'GeoGuide/0.1 local place companion'}) as client:
+            return normalize_overpass_response(_get_json(client, 'https://overpass-api.de/api/interpreter', data=build_overpass_query(lat, lon, radius_km)))
+
+    providers = {'geocode': fetch_geocode, 'weather': fetch_weather_context}
+    if include_places:
+        providers['places'] = fetch_places
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix='geoguide-context') as executor:
+        pending = {executor.submit(fetcher): name for name, fetcher in providers.items()}
+        for future in as_completed(pending):
+            provider = pending[future]
             try:
-                overpass = _get_json(client, 'https://overpass-api.de/api/interpreter', data=build_overpass_query(lat, lon, radius_km))
-                places = normalize_overpass_response(overpass)
+                value = future.result()
+                if provider == 'geocode':
+                    resolved = value
+                elif provider == 'weather':
+                    weather = value
+                else:
+                    places = value
             except (httpx.HTTPError, ValueError) as exc:
-                provider_errors.append(f'places: {type(exc).__name__}')
-    except httpx.HTTPError as exc:
-        provider_errors.append(f'network: {type(exc).__name__}')
+                provider_errors.append(f'{provider}: {type(exc).__name__}')
 
     if resolved:
         location.update({key: value for key, value in resolved.items() if value is not None})
@@ -107,5 +119,5 @@ def safe_location(lat: Any, lon: Any, city: Any = None) -> dict[str, Any]:
         if not (-90 <= safe_lat <= 90 and -180 <= safe_lon <= 180):
             raise ValueError
     except (TypeError, ValueError):
-        safe_lat, safe_lon = _DEFAULT_LOCATION['lat'], _DEFAULT_LOCATION['lon']
+        raise ValueError('A valid location is required.') from None
     return {'lat': safe_lat, 'lon': safe_lon, 'city': city if isinstance(city, str) and city else None}

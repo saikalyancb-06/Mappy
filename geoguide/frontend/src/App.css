@@ -57,6 +57,11 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .text-action { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 0; background: none; color: var(--forest); font-size: 13px; font-weight: 800; }
 .featured .text-action { color: var(--lime); }
 .briefing-card, .context-grid > div, .timeline-card, .profile-card { padding: 18px; border-radius: 26px; background: var(--white-glass); border: 1px solid rgba(255,255,255,.7); box-shadow: var(--shadow); }
+.ingestion-card { display: grid; gap: 10px; padding: 16px 18px; border-radius: 22px; background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.7); }
+.ingestion-card strong { margin-left: auto; color: var(--forest); }
+.ingestion-card p { color: var(--muted); font-size: 13px; }
+.progress-track { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(14,42,26,.12); }
+.progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--forest); transition: width .3s ease; }
 .briefing-card { display: grid; gap: 12px; }
 .verified-row { justify-content: flex-start; color: var(--forest); font-size: 12px; font-weight: 800; }
 .verified-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
@@ -91,9 +96,13 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .ask-intro > svg { color: var(--forest); }
 .suggestion-row { display: flex; gap: 8px; overflow-x: auto; padding-top: 4px; }
 .message-list { display: grid; gap: 12px; align-content: end; min-height: 220px; }
-.message { max-width: 84%; padding: 13px 15px; border-radius: 20px; }
-.message p { font-size: 14px; line-height: 1.45; }
+.message { max-width: 88%; padding: 13px 15px; border-radius: 20px; }
+.message p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 .message small { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; }
+.ask-results { display: grid; gap: 8px; margin-top: 10px; }
+.ask-result { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.72); color: var(--ink); text-decoration: none; }
+.ask-result strong { font-size: 13px; }
+.ask-result span, .ask-result p { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .message.user { justify-self: end; border-bottom-right-radius: 6px; background: var(--forest); color: white; }
 .message.assistant { border-bottom-left-radius: 6px; background: var(--white-glass); }
 .ask-composer { display: flex; gap: 8px; margin-top: auto; padding: 8px; border-radius: 999px; background: rgba(255,255,255,.85); box-shadow: var(--shadow); }
@@ -111,6 +120,11 @@ h3 { color: var(--ink); font-size: 19px; line-height: 1.15; }
 .primary-button { background: var(--forest); color: white; }
 .secondary-button { background: rgba(255,255,255,.72); color: var(--forest); }
 .skip-button { background: transparent; color: var(--muted); }
+.loading-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--mint); color: var(--forest); font-weight: 800; }
+.destination-form { display: grid; gap: 10px; margin-top: 4px; }
+.destination-form label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.destination-form input { min-height: 50px; padding: 0 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.8); color: var(--ink); font: inherit; outline: 0; }
+.destination-form input:focus { border-color: var(--forest); }
 .onboarding-screen, .permission-screen { width: min(100%, 430px); min-height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; padding: 30px 24px max(30px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, var(--mint), #eff5ed); }
 .progress-dots { display: flex; gap: 7px; }
 .progress-dots span { width: 7px; height: 7px; border-radius: 50%; background: rgba(14,42,26,.2); }

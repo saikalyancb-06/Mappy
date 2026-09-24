@@ -33,9 +33,22 @@ class Poi(Base):
     lon = Column(Float, nullable=False)
     rating = Column(Float, nullable=True)
     open_now = Column(Boolean, default=False)
+    opening_hours = Column(Text, nullable=True)
     price_level = Column(String, nullable=True)
     source = Column(String, nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class KnowledgeDocument(Base):
+    __tablename__ = 'knowledge_documents'
+
+    id = Column(String, primary_key=True)
+    area_id = Column(String, nullable=False, index=True)
+    entity_id = Column(String, nullable=True, index=True)
+    content = Column(Text, nullable=False)
+    source = Column(String, nullable=True)
+    source_url = Column(String, nullable=True)
+    retrieved_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Hotel(Base):
@@ -142,6 +155,7 @@ class IngestionJob(Base):
     status = Column(String, default='queued')
     step = Column(String, default='pending')
     progress = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 

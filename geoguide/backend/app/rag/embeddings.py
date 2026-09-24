@@ -4,7 +4,7 @@ from typing import Any
 
 try:
     from sentence_transformers import SentenceTransformer
-except ImportError:  # pragma: no cover - optional dependency in early scaffold stage
+except Exception:  # pragma: no cover - optional dependency/runtime binary compatibility
     SentenceTransformer = None  # type: ignore[assignment]
 
 from app.config import EMBEDDING_MODEL

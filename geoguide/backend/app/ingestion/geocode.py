@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
+
 
 def reverse_geocode(payload: list[dict[str, Any]] | dict[str, Any] | None) -> dict[str, Any]:
     if not payload:
@@ -34,3 +36,23 @@ def reverse_geocode(payload: list[dict[str, Any]] | dict[str, Any] | None) -> di
         'currency': None,
         'country_code': address.get('country_code'),
     }
+
+
+def forward_geocode(query: str, client: httpx.Client | None = None) -> dict[str, Any] | None:
+    search = query.strip()
+    if not search:
+        return None
+    owns_client = client is None
+    active_client = client or httpx.Client(timeout=8.0, headers={'User-Agent': 'GeoGuide/0.1 local place companion'})
+    try:
+        response = active_client.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={'q': search, 'format': 'jsonv2', 'limit': 1, 'addressdetails': 1},
+        )
+        response.raise_for_status()
+        return reverse_geocode(response.json())
+    except (httpx.HTTPError, ValueError):
+        return None
+    finally:
+        if owns_client:
+            active_client.close()

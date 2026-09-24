@@ -2,6 +2,10 @@ export const interestOptions = [
   { id: 'nature', label: 'Nature' },
   { id: 'heritage', label: 'Heritage' },
   { id: 'food', label: 'Food' },
+  { id: 'cafes', label: 'Cafes' },
+  { id: 'culture', label: 'Culture' },
+  { id: 'shopping', label: 'Shopping' },
+  { id: 'nightlife', label: 'Nightlife' },
   { id: 'art', label: 'Art' },
 ]
 

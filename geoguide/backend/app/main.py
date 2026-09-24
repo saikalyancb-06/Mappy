@@ -3,8 +3,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import router
+from app.api.routes import knowledge, router
 from app.config import APP_ENV, APP_HOST, APP_PORT
+from app.config import GROQ_API_KEY, SERPAPI_KEY
 from app.db.session import init_db
 
 init_db()
@@ -31,8 +32,9 @@ def health() -> dict:
         'environment': APP_ENV,
         'services': {
             'sqlite': 'ready',
-            'qdrant': 'pending',
-            'groq': 'pending',
+            'qdrant': 'ready' if knowledge.store.client is not None else 'degraded',
+            'groq': 'configured' if GROQ_API_KEY else 'unconfigured',
+            'serpapi': 'configured' if SERPAPI_KEY else 'unconfigured',
         },
     }
 

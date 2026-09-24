@@ -16,3 +16,9 @@ def init_db() -> None:
         columns = {row[1] for row in connection.execute(text('PRAGMA table_info(users)'))}
         if 'password_hash' not in columns:
             connection.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR NOT NULL DEFAULT ''"))
+        ingestion_columns = {row[1] for row in connection.execute(text('PRAGMA table_info(ingestion_jobs)'))}
+        if 'error' not in ingestion_columns:
+            connection.execute(text("ALTER TABLE ingestion_jobs ADD COLUMN error TEXT"))
+        poi_columns = {row[1] for row in connection.execute(text('PRAGMA table_info(pois)'))}
+        if 'opening_hours' not in poi_columns:
+            connection.execute(text("ALTER TABLE pois ADD COLUMN opening_hours TEXT"))

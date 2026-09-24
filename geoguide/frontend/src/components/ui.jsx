@@ -37,8 +37,10 @@ export function PlaceCard({ place, featured = false, onOpen, saved = false, onSa
       <div className="place-meta">
         {place.distance && <span><Navigation size={14} />{place.distance}</span>}
         {place.score != null && <span className="match"><span>{place.score}%</span> match</span>}
+        {place.rating != null && <span>{place.rating} rating</span>}
       </div>
       {place.reasons?.[0] && <p>{place.reasons[0]}</p>}
+      {place.openingHours && <p>{place.openingHours}</p>}
       {onOpen && <button className="text-action" onClick={onOpen} type="button">View place <ArrowRight size={16} /></button>}
     </div>
   </article>
