@@ -18,6 +18,7 @@ from app.core.rules import categories_for_interest, category_group, group_catego
 from app.core.text import tokens
 from app.geo import opening_hours
 from app.geo.distance import haversine_km, valid_coordinates
+from app.policy.recommendation import context_from_profile, exclusion_reason
 from app.models import Candidate
 from app.feedback.signals import community_quality, place_communities, user_vibes, vibe_compatibility
 from app.ranking.confidence import assess, bars
@@ -64,6 +65,10 @@ class RankResult:
 def _hard_filter(candidate: Candidate, request: RankRequest) -> str | None:
     if not valid_coordinates(candidate.lat, candidate.lon):
         return "invalid_coordinates"
+    # One deterministic policy for every suggestion; a look-up of a named place is a factual request.
+    policy = exclusion_reason(candidate, context_from_profile(request.user, explicit=request.profile_name == "lookup"))
+    if policy:
+        return policy
     if request.reference and request.radius_km is not None:
         distance = haversine_km(request.reference[0], request.reference[1], candidate.lat, candidate.lon)
         candidate.distance_km = round(distance, 3)

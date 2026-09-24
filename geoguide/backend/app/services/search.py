@@ -26,6 +26,7 @@ from app.geo.geocoding import search_destinations
 from app.models import Candidate
 from app.ranking.ranker import RankRequest, rank
 from app.search.aggregator import aggregate
+from app.places.live import persist_live_results
 from app.search.normalizer import candidate_from_web
 from app.search.serpapi import SearchProviderError, SerpApiClient, client as default_client
 from app.services.discovery import DiscoveryRequest, discover
@@ -88,6 +89,8 @@ def search(query: str, *, reference: ActiveReference | None, user_point: tuple[f
         try:
             response = web.search(query, engine="google_maps", lat=anchor[0] if anchor else None, lon=anchor[1] if anchor else None, zoom=13, limit=10)
             live = [c for c in (candidate_from_web(r, response.retrieved_at, reference=anchor) for r in response.results) if c]
+            # An unknown place found live is stored when it lies inside the registered city.
+            persist_live_results(reference.destination_id if reference else None, response.results)
             for candidate in live:
                 matches[candidate.id] = max(name_similarity(query, candidate.name), 0.6)
             if trace:

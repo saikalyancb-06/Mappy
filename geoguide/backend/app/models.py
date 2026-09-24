@@ -14,7 +14,7 @@ from app.core.text import normalize
 from app.geo import opening_hours
 
 # Relative trust per source type; overridable in data/config/ranking.json.
-DEFAULT_SOURCE_CONFIDENCE = {"curated": 0.95, "database": 0.9, "osm": 0.75, "serpapi_maps": 0.7, "dataset": 0.6, "serpapi_web": 0.5}
+DEFAULT_SOURCE_CONFIDENCE = {"curated": 0.95, "database": 0.9, "google_maps": 0.8, "osm": 0.75, "serpapi_maps": 0.7, "dataset": 0.6, "serpapi_web": 0.5}
 
 
 @dataclass
@@ -41,6 +41,8 @@ class Candidate:
     neighborhood: str | None = None
     description: str | None = None
     tags: list[str] = field(default_factory=list)
+    provider_types: list[str] = field(default_factory=list)  # the provider's own type labels (policy + display)
+    image_url: str | None = None
     rating: float | None = None
     review_count: int | None = None
     popularity_score: int | None = None
@@ -128,11 +130,16 @@ class Evidence:
 def candidate_from_poi(poi: Any, distance_km: float | None = None) -> Candidate:
     """Normalise a ``Poi`` ORM row."""
     hours = opening_hours.load(poi.opening_hours) or opening_hours.parse_osm(poi.opening_hours_raw)
-    source_type = "curated" if (poi.source or "").startswith("curated") else "osm" if (poi.source or "") == "OpenStreetMap" else "dataset" if getattr(poi, "data_source_id", None) == "ps13" else "database"
+    source_type = "curated" if (poi.source or "").startswith("curated") else "osm" if (poi.source or "") == "OpenStreetMap" else "dataset" if getattr(poi, "data_source_id", None) == "ps13" else "google_maps" if getattr(poi, "data_source_id", None) == "google_maps" else "database"
     try:
         tags = json.loads(poi.tags or "[]")
     except ValueError:
         tags = []
+    try:
+        provider_types = json.loads(getattr(poi, "provider_types", None) or "[]")
+        images = json.loads(getattr(poi, "images", None) or "[]")
+    except ValueError:
+        provider_types, images = [], []
     return Candidate(
         id=poi.id,
         name=poi.name,
@@ -145,6 +152,9 @@ def candidate_from_poi(poi: Any, distance_km: float | None = None) -> Candidate:
         neighborhood=poi.neighborhood,
         description=poi.description,
         tags=tags if isinstance(tags, list) else [],
+        provider_types=provider_types if isinstance(provider_types, list) else [],
+        image_url=images[0] if isinstance(images, list) and images else None,
+        open_detail={"permanently_closed": True} if (poi.status or "") == "permanently_closed" else {},
         rating=poi.rating,
         review_count=poi.review_count,
         popularity_score=getattr(poi, "popularity_score", None),

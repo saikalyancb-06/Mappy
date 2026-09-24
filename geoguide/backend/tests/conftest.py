@@ -30,6 +30,7 @@ os.environ.update({
     "AUTO_SEED_FEEDBACK": "false",
     "APP_ENV": "test",
     "LLM_QUERY_PARSING": "false",
+    "CITY_ENRICHMENT_ENABLED": "false",  # tests run enrichment explicitly, with fake providers
 })
 sys.path.insert(0, str(BACKEND))
 
@@ -71,6 +72,7 @@ def no_network(monkeypatch):
     monkeypatch.setattr("app.core.http.get_json", offline)
     monkeypatch.setattr("app.geo.geocoding.get_json", offline)
     monkeypatch.setattr("app.weather.open_meteo.get_json", offline)
+    monkeypatch.setattr("app.cities.knowledge.get_json", offline)
     monkeypatch.setattr("app.ingestion.overpass.fetch_and_store", lambda *a, **k: (0, {"source": "overpass", "code": "unreachable", "message": "offline"}))
     monkeypatch.setattr("app.services.discovery.fetch_and_store", lambda *a, **k: (0, {"source": "overpass", "code": "unreachable", "message": "offline"}))
     from app.core.cache import cache_clear_memory

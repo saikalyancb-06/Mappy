@@ -111,6 +111,8 @@ def update_preferences(payload: dict | None, authorization: str | None = Header(
             preference.interests = json.dumps({k: float(v) for k, v in interests.items() if k in valid_interests})
         if isinstance(safe.get("accessibility"), list):
             preference.accessibility = json.dumps([item for item in safe["accessibility"] if item in taxonomy()["preferences"]])
+        if isinstance(safe.get("exclude_places_of_worship"), bool):
+            preference.exclude_places_of_worship = safe["exclude_places_of_worship"]
         for key in ("likes", "dislikes"):
             if isinstance(safe.get(key), list):
                 setattr(preference, key, json.dumps([str(item) for item in safe[key]][:200]))

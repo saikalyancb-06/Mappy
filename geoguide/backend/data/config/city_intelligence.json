@@ -1,0 +1,54 @@
+{
+  "_comment": "City intelligence: what gets collected when a city is selected, how fresh each part must be, and when questions are answered from the database vs live sources. Queries are templates ({city}, {region}, {country}); nothing here names a specific city or place.",
+  "freshness_days": {
+    "stable": 180,
+    "semi_stable": 30,
+    "retry_failed_after_hours": 6
+  },
+  "components": {
+    "knowledge":  {"class": "stable", "required": true, "source": "wikipedia"},
+    "attractions": {"class": "semi_stable", "required": true, "queries": ["top attractions in {city}", "tourist attractions in {city}", "things to do in {city}"]},
+    "landmarks": {"class": "stable", "required": true, "queries": ["famous landmarks in {city}", "historical places in {city}", "monuments in {city}"]},
+    "museums": {"class": "semi_stable", "required": false, "queries": ["museums in {city}", "art galleries in {city}"]},
+    "parks": {"class": "semi_stable", "required": false, "queries": ["parks in {city}", "gardens in {city}"]},
+    "viewpoints": {"class": "semi_stable", "required": false, "queries": ["viewpoints in {city}", "scenic spots in {city}"]},
+    "nature": {"class": "semi_stable", "required": false, "queries": ["nature places in {city}", "lakes in {city}"]},
+    "activities": {"class": "semi_stable", "required": false, "queries": ["popular activities in {city}", "local experiences in {city}"]},
+    "family": {"class": "semi_stable", "required": false, "queries": ["family activities in {city}"]},
+    "markets": {"class": "semi_stable", "required": false, "queries": ["famous markets in {city}"]},
+    "food": {"class": "semi_stable", "required": false, "queries": ["famous local food places in {city}"]}
+  },
+  "provider": {
+    "results_per_query": 20,
+    "max_concurrency": 3,
+    "min_interval_s": 0.3,
+    "max_requests_per_run": 30,
+    "details_for_top": 8,
+    "stop_on": ["unauthorized", "rate_limited", "web_search_unavailable"]
+  },
+  "places": {
+    "place_ttl_days": 30,
+    "dedup_name_similarity": 0.9,
+    "dedup_distance_km": 0.15,
+    "dedup_same_name_distance_km": 0.5,
+    "address_similarity": 0.85,
+    "persist_live_results": true
+  },
+  "routing": {
+    "min_db_results": 5,
+    "min_category_results": 3,
+    "stale_ok_for_stable_questions": true
+  },
+  "knowledge_sections": {
+    "overview": ["__summary__"],
+    "history": ["history", "etymology"],
+    "culture": ["culture", "arts", "art and culture", "religion", "festivals", "demographics"],
+    "geography": ["geography", "geology", "topography", "cityscape", "environment"],
+    "climate": ["climate"],
+    "food": ["cuisine", "food"],
+    "transport": ["transport", "transportation", "transit"],
+    "neighborhoods": ["neighbourhoods", "neighborhoods", "districts", "localities"],
+    "attractions": ["tourism", "tourist attractions", "landmarks", "places of interest", "sights"]
+  },
+  "knowledge_max_chars": 1600
+}

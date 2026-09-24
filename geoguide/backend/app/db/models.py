@@ -69,6 +69,62 @@ class Destination(Base):
     curated = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow)
+    # City registry (city intelligence): identity, enrichment state and freshness.
+    normalized_name = Column(String, nullable=True, index=True)
+    enrichment_status = Column(String, nullable=True, default="NOT_STARTED")  # NOT_STARTED | QUEUED | ENRICHING | PARTIAL | READY | FAILED | STALE
+    data_version = Column(Integer, nullable=True, default=0)
+    last_enriched_at = Column(DateTime, nullable=True)
+    last_refreshed_at = Column(DateTime, nullable=True)
+    external_ids = Column(Text, nullable=True)  # JSON: {"osm": "...", "wikidata": "...", "geonames": "..."}
+    boundary_radius_km = Column(Float, nullable=True)  # explicit destination boundary (overrides the detected extent)
+    last_enrichment_report = Column(Text, nullable=True)  # JSON metrics of the latest enrichment run
+
+
+class CityEnrichmentComponent(Base):
+    """One slice of a city's intelligence (overview, museums, parks …) with its own state and freshness."""
+
+    __tablename__ = "city_enrichment_components"
+
+    id = Column(String, primary_key=True)  # f"{destination_id}:{component}"
+    destination_id = Column(String, nullable=False, index=True)
+    component = Column(String, nullable=False)
+    freshness_class = Column(String, nullable=False)  # stable | semi_stable
+    status = Column(String, nullable=False, default="pending")  # pending | running | done | empty | failed
+    item_count = Column(Integer, default=0)
+    requests = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=utcnow)
+
+
+class ProviderRawRecord(Base):
+    """The provider's raw payload for a stored place, for debugging/auditing only (never read by features)."""
+
+    __tablename__ = "provider_raw_records"
+
+    id = Column(String, primary_key=True)  # f"{provider}:{external_id}"
+    provider = Column(String, nullable=False)
+    external_id = Column(String, nullable=False)
+    poi_id = Column(String, nullable=True, index=True)
+    payload = Column(Text, nullable=False)
+    fetched_at = Column(DateTime, default=utcnow)
+
+
+class PlaceReviewSignal(Base):
+    """Vibe/aspect evidence read from provider reviews (kept apart from GeoGuide feedback)."""
+
+    __tablename__ = "place_review_signals"
+
+    id = Column(String, primary_key=True)  # f"{poi_id}:{kind}:{key}"
+    poi_id = Column(String, nullable=False, index=True)
+    kind = Column(String, nullable=False)  # vibe | aspect
+    key = Column(String, nullable=False)
+    polarity = Column(Float, default=1.0)  # +1 supports, -1 contradicts (aspects: negative experiences)
+    evidence_count = Column(Integer, default=0)
+    reviews_read = Column(Integer, default=0)
+    source = Column(String, nullable=False, default="google_maps_reviews")
+    updated_at = Column(DateTime, default=utcnow)
 
 
 class EntityAlias(Base):
@@ -135,6 +191,15 @@ class Poi(Base):
     confidence = Column(Float, nullable=True)
     fetched_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow)
+    # Provider identity and freshness (city intelligence).
+    external_place_id = Column(String, nullable=True, index=True)  # e.g. Google Maps place_id (via SerpApi)
+    provider_data_id = Column(String, nullable=True)  # e.g. Google Maps data_id, used for place details
+    subcategory = Column(String, nullable=True)
+    provider_types = Column(Text, nullable=True)  # JSON list of the provider's own type labels
+    images = Column(Text, nullable=True)  # JSON list of image URLs
+    metadata_json = Column(Text, nullable=True)  # JSON: extra normalised attributes
+    last_verified_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
 
 
 class KnowledgeChunk(Base):
@@ -318,6 +383,7 @@ class UserPreference(Base):
     interests = Column(Text, default="{}")
     likes = Column(Text, default="[]")
     dislikes = Column(Text, default="[]")
+    exclude_places_of_worship = Column(Boolean, nullable=True, default=False)  # leave all faiths' places of worship out of suggestions
     updated_at = Column(DateTime, default=utcnow)
 
 

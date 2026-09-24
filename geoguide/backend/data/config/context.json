@@ -1,7 +1,7 @@
 {
   "_comment": "City-and-date context engine. RAG domains are metadata filters (knowledge sections) applied before ranking; tips are rules over retrieved data, each carrying the fact it rests on.",
   "rag_domains": {
-    "place": {"categories": ["overview", "history", "architecture", "orientation", "practical", "food", "transport"], "query": "overview history significance what makes this place special"},
+    "place": {"categories": ["overview", "history", "architecture", "orientation", "practical", "food", "transport", "geography", "climate", "neighborhoods", "attractions"], "query": "overview history significance what makes this place special"},
     "culture": {"categories": ["culture", "etiquette", "seasonal", "safety"], "query": "local customs etiquette culture traditions dress"},
     "events": {"categories": ["seasonal", "culture"], "query": "festival celebration season events"}
   },

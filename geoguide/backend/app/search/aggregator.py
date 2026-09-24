@@ -36,6 +36,9 @@ def same_entity(a: Candidate, b: Candidate) -> bool:
     source_ids_a = {s.source_id for s in a.sources if s.source_id}
     if source_ids_a & {s.source_id for s in b.sources if s.source_id} or a.id == b.id:
         return True
+    # Numbered names ("Terminal 1" / "Terminal 2", "Museum 2") are different places however similar they look.
+    if {t for t in normalize(a.name).split() if any(ch.isdigit() for ch in t)} != {t for t in normalize(b.name).split() if any(ch.isdigit() for ch in t)}:
+        return False
     # Within one destination, an identical name is the same place even when sources disagree on coordinates.
     if a.destination_id and a.destination_id == b.destination_id and normalize(a.name) == normalize(b.name):
         return True

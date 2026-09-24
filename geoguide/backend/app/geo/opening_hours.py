@@ -147,3 +147,82 @@ def describe(hours_value: Any) -> str | None:
     if hours.get("notes"):
         parts.append(str(hours["notes"]))
     return "; ".join(parts) or None
+
+
+_GOOGLE_DAYS = {"monday": "mon", "tuesday": "tue", "wednesday": "wed", "thursday": "thu", "friday": "fri", "saturday": "sat", "sunday": "sun"}
+_CLOCK = re.compile(r"^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
+
+
+def _clock(text: str, meridiem: str | None) -> tuple[str, str | None] | None:
+    match = _CLOCK.match(text.strip().lower())
+    if not match:
+        return None
+    hour, minute, own = int(match.group(1)), int(match.group(2) or 0), match.group(3) or meridiem
+    if own == "pm" and hour != 12:
+        hour += 12
+    elif own == "am" and hour == 12:
+        hour = 0
+    if hour > 24 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}", own
+
+
+def parse_google(days: dict[str, Any] | list[Any] | None) -> dict[str, Any] | None:
+    """Parse Google Maps weekly hours ({"monday": "9 AM–5 PM", …}) into the structured format; None if unreadable."""
+    if isinstance(days, list):  # place results use [{"monday": "…"}, …]
+        merged: dict[str, Any] = {}
+        for item in days:
+            if isinstance(item, dict):
+                merged.update(item)
+        days = merged
+    if not isinstance(days, dict) or not days:
+        return None
+    weekly: dict[str, list[list[str]]] = {}
+    closed: list[str] = []
+    always = True
+    for name, value in days.items():
+        day = _GOOGLE_DAYS.get(str(name).strip().lower())
+        if day is None or not isinstance(value, str):
+            return None
+        text = value.replace(" ", " ").replace(" ", " ").replace("–", "-").replace("—", "-").strip().lower()
+        if text in {"open 24 hours", "24 hours"}:
+            weekly[day] = [["00:00", "23:59"]]
+            continue
+        always = False
+        if text == "closed":
+            weekly[day], closed = [], [*closed, day]
+            continue
+        intervals = []
+        for span in (part.strip() for part in text.split(",")):
+            if "-" not in span:
+                return None
+            start_text, end_text = (part.strip() for part in span.split("-", 1))
+            end = _clock(end_text, None)
+            start = _clock(start_text, end[1] if end else None)
+            if not start or not end:
+                return None
+            intervals.append([start[0], end[0]])
+        weekly[day] = intervals
+    if always and len(weekly) == 7:
+        return {"always_open": True}
+    # Evaluation works within one day: "24:00" becomes 23:59, and a span past midnight is split
+    # into the evening part and an early-morning part on the next day.
+    spill: dict[str, list[list[str]]] = {}
+    for day, spans in weekly.items():
+        fixed = []
+        for start, end in spans:
+            end = "23:59" if end == "24:00" else end
+            if end <= start and end != "00:00" or end == "00:00" and start != "00:00":
+                fixed.append([start, "23:59"])
+                if end != "00:00":
+                    spill.setdefault(DAYS[(DAYS.index(day) + 1) % 7], []).append(["00:00", end])
+            else:
+                fixed.append([start, end])
+        weekly[day] = fixed
+    for day, spans in spill.items():
+        if day in weekly and day not in closed:
+            weekly[day] = sorted([*spans, *weekly[day]])
+    result: dict[str, Any] = {"weekly": weekly}
+    if closed:
+        result["closed"] = closed
+    return result
