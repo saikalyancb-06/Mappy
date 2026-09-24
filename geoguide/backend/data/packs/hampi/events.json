@@ -1,0 +1,5 @@
+[
+  {"id": "evt-hampi-utsav", "title": "Hampi Utsav (Vijaya Utsav)", "summary": "Annual state cultural festival with music, dance, processions and light shows among the monuments. Dates are announced each year by the Government of Karnataka, so confirm before planning.", "recurrence": "annual; dates vary", "typical_months": null, "source": "curated: Hampi demo pack", "confidence": 0.7},
+  {"id": "evt-hampi-rathotsava", "title": "Virupaksha Car Festival (Rathotsava)", "summary": "Chariot festival of the Virupaksha Temple, when the temple car is pulled along Hampi Bazaar. Usually held in March or April; exact dates follow the Hindu calendar.", "recurrence": "annual; lunar calendar", "typical_months": [3, 4], "source": "curated: Hampi demo pack", "confidence": 0.65},
+  {"id": "evt-hampi-phala-pooja", "title": "Phala Pooja (Virupaksha–Pampa wedding festival)", "summary": "Temple festival celebrating the betrothal and marriage of Virupaksha and Pampa, usually around December; exact dates follow the Hindu calendar.", "recurrence": "annual; lunar calendar", "typical_months": [12], "source": "curated: Hampi demo pack", "confidence": 0.6}
+]

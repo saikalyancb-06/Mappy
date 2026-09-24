@@ -1,0 +1,17 @@
+{
+  "id": "dest-hampi",
+  "name": "Hampi",
+  "aliases": ["Hampe", "Hampi Karnataka", "Hampi, Karnataka", "Vijayanagara", "Group of Monuments at Hampi", "Hampi village"],
+  "region": "Karnataka",
+  "country": "India",
+  "country_code": "IN",
+  "lat": 15.3350,
+  "lon": 76.4600,
+  "coverage_radius_km": 12,
+  "timezone": "Asia/Kolkata",
+  "currency": "INR",
+  "languages": ["kn", "en", "hi"],
+  "summary": "Ruined capital of the Vijayanagara Empire on the Tungabhadra river, a UNESCO World Heritage Site set among granite boulder hills.",
+  "source": "curated: Hampi demo pack",
+  "source_url": "https://whc.unesco.org/en/list/241"
+}

@@ -1,50 +1,41 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import knowledge, router
-from app.config import APP_ENV, APP_HOST, APP_PORT
-from app.config import GROQ_API_KEY, SERPAPI_KEY
+from app.api.routes import ask, auth, destinations, places, plan, system
+from app.config import APP_ENV, APP_HOST, APP_PORT, AUTO_SEED_PACKS, CORS_ORIGINS
+from app.core.logging import configure_logging
+from app.db.seed import seed_if_empty
 from app.db.session import init_db
+from app.retrieval.indexer import reindex_in_background
 
-init_db()
-app = FastAPI(title='GeoGuide API', version='0.1.0')
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
-)
-app.include_router(router)
+configure_logging()
 
 
-@app.on_event('startup')
-def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     init_db()
+    if AUTO_SEED_PACKS:
+        seed_if_empty()
+    reindex_in_background()  # embeds knowledge when the embedding model is available
+    yield
 
 
-@app.get('/api/health')
-def health() -> dict:
-    return {
-        'status': 'ok',
-        'environment': APP_ENV,
-        'services': {
-            'sqlite': 'ready',
-            'qdrant': 'ready' if knowledge.store.client is not None else 'degraded',
-            'groq': 'configured' if GROQ_API_KEY else 'unconfigured',
-            'serpapi': 'configured' if SERPAPI_KEY else 'unconfigured',
-        },
-    }
+app = FastAPI(title="GeoGuide API", version="0.2.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=CORS_ORIGINS != ["*"], allow_methods=["*"], allow_headers=["*"])
+for module in (system, auth, places, ask, plan, destinations):
+    app.include_router(module.router)
 
 
-@app.get('/')
+@app.get("/")
 def root() -> dict:
-    return {'message': 'GeoGuide backend is running.'}
+    return {"message": "GeoGuide backend is running.", "docs": "/docs"}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run('app.main:app', host=APP_HOST, port=APP_PORT, reload=APP_ENV == 'development')
+    uvicorn.run("app.main:app", host=APP_HOST, port=APP_PORT, reload=APP_ENV == "development")

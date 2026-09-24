@@ -1,0 +1,5 @@
+[
+ {"id": "fact-tv-fort-1", "poi_id": "tv-old-fort", "category": "history", "content": "The Old Fort walls are made of local granite and are 12 metres high."},
+ {"id": "fact-tv-temple-1", "poi_id": "tv-lotus-temple", "category": "visitor", "content": "The Lotus Temple is calm and uncrowded in the early morning."},
+ {"id": "fact-orphan", "poi_id": "does-not-exist", "content": "Should be skipped."}
+]

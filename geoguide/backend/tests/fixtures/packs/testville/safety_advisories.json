@@ -1,0 +1,4 @@
+[
+ {"id": "adv-tv-river", "title": "Strong river currents", "body": "Do not swim in the river.", "category": "water", "severity": "high"},
+ {"id": "adv-tv-winter", "title": "Winter fog", "body": "Dense fog on winter mornings.", "category": "general", "severity": "low", "active_months": [12, 1]}
+]
